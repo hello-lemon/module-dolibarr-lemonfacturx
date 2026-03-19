@@ -2,3 +2,13 @@
 *.swo
 *~
 .DS_Store
+
+# Vendor: tests, docs, tutoriels, CI (fichiers non necessaires et potentiellement dangereux)
+vendor/**/tests/
+vendor/**/test/
+vendor/**/doc/
+vendor/**/docs/
+vendor/**/tutorial/
+vendor/**/makefont/
+vendor/**/img/
+vendor/**/.github/
