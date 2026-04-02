@@ -29,6 +29,8 @@ class modLemonFacturX extends DolibarrModules
 		$this->version = '1.0.0';
 		$this->const_name = 'MAIN_MODULE_'.strtoupper($this->name);
 		$this->picto = 'bill';
+		$this->editor_name = 'Lemon';
+		$this->editor_url = 'https://hellolemon.fr';
 
 		$this->module_parts = array(
 			'triggers' => 0,
