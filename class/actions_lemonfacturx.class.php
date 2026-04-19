@@ -75,6 +75,28 @@ class ActionsLemonFacturX
 		}
 
 		$phpBin = getDolGlobalString('LEMONFACTURX_PHP_CLI_PATH', 'php');
+
+		// Hardening : la constante est modifiable par un admin via /admin/const.php.
+		// escapeshellarg() sur la commande bloque déjà toute injection shell (une
+		// valeur piégée finit en "command not found"), mais on refuse explicitement
+		// les valeurs avec caractères exotiques pour éviter les fautes de frappe
+		// qui partiraient en boucle d'erreur et pour afficher un message clair.
+		if (!preg_match('#^[A-Za-z0-9/._-]+$#', $phpBin)) {
+			@unlink($xmlTmpFile);
+			$this->error = 'LemonFacturX: LEMONFACTURX_PHP_CLI_PATH contient des caractères interdits (attendu : chemin alphanumérique, « / . _ - »)';
+			dol_syslog($this->error.' — valeur reçue : '.$phpBin, LOG_ERR);
+			return 0;
+		}
+		// Si l'admin a fourni un chemin absolu, on vérifie qu'il pointe vraiment
+		// vers un exécutable. Cas relatif ("php", "php8.2") : on laisse passer
+		// au shell qui résoudra via PATH.
+		if (strpos($phpBin, '/') !== false && !is_executable($phpBin)) {
+			@unlink($xmlTmpFile);
+			$this->error = 'LemonFacturX: le binaire PHP configuré est introuvable ou non exécutable : '.$phpBin;
+			dol_syslog($this->error, LOG_ERR);
+			return 0;
+		}
+
 		$scriptPath = escapeshellarg($modulePath.'/lib/inject_facturx.php');
 		$pdfArg = escapeshellarg($file);
 		$xmlArg = escapeshellarg($xmlTmpFile);
