@@ -4,6 +4,8 @@ Module Dolibarr pour la génération automatique de factures **Factur-X EN16931*
 
 Chaque facture client générée dans Dolibarr est automatiquement convertie au format Factur-X, conforme aux règles **BR-FR** (norme XP Z12-012 V1.2.0) pour la facturation électronique française.
 
+Développé et maintenu par [Lemon](https://hellolemon.fr), agence web et communication à Clermont-Ferrand, spécialisée dans Dolibarr, WordPress et la facturation électronique.
+
 ## Prérequis
 
 - **Dolibarr** 22.0.x
@@ -119,4 +121,17 @@ Tester avec [B2Brouter Factur-X Validator](https://www.b2brouter.net/fr/factur-x
 
 ## Licence
 
-Ce module est distribué sous licence [GPLv3](https://www.gnu.org/licenses/gpl-3.0.html) — Copyright (C) 2026 SASU LEMON.
+Ce module est distribué sous licence [GPLv3](https://www.gnu.org/licenses/gpl-3.0.html) — Copyright (C) 2026 [SASU Lemon](https://hellolemon.fr).
+
+## À propos de Lemon
+
+[Lemon](https://hellolemon.fr) est une agence web et communication basée à Clermont-Ferrand, fondée en 2012. Nous accompagnons TPE, PME et indépendants bien au-delà du simple site web :
+
+- **Déploiement et hébergement Dolibarr** : installation, migration, paramétrage métier, formation de vos équipes
+- **Modules Dolibarr sur mesure** : CRM, pointeuse NFC, facturation électronique, intégrations API, automatisations — on développe le module qui manque à votre ERP
+- **Facturation électronique** : mise en conformité Factur-X EN16931, raccordement aux Plateformes Agréées (PA/PDP), accompagnement réforme 2026-2027
+- **IA au service des pros** : extraction automatique de factures fournisseurs, rapprochement bancaire, génération de contenus, assistants métier — on met l'IA au travail pour vous faire gagner du temps
+- **Sites web** : WordPress, Astro, Symfony — performance, SEO, éco-conception
+- **Communication & print** : identité visuelle, impression, fabrication (laser, 3D)
+
+Un projet Dolibarr, une idée d'automatisation, un besoin IA ? [Parlons-en](https://hellolemon.fr) — Clermont-Ferrand (63).
