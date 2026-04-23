@@ -22,3 +22,14 @@ LemonFacturXDiagBankNotFound = Compte bancaire introuvable
 LemonFacturXDiagBankNotSet = Aucun compte bancaire sélectionné
 LemonFacturXDiagFixLink = Corriger
 LemonFacturXDiagAllOk = Toutes les informations obligatoires sont renseignées !
+
+LemonFacturXStrictMode = Mode de gestion des erreurs
+LemonFacturXStrictModeHint = Best-effort : si la génération Factur-X échoue, le PDF classique est fourni avec un warning. Strict : bloque la génération avec une erreur visible si le XML est invalide ou l'injection PDF échoue.
+LemonFacturXStrictModeBestEffort = Best-effort (défaut, non-bloquant)
+LemonFacturXStrictModeStrict = Strict (bloque si Factur-X échoue)
+LemonFacturXPhpCliPath = Chemin du binaire PHP CLI
+LemonFacturXPhpCliPathHint = Utilisé par le subprocess d'injection PDF. Laisser "php" si le binaire est dans le PATH, sinon chemin absolu (ex : /usr/bin/php8.2). Ne jamais utiliser PHP_BINARY en contexte FPM.
+LemonFacturXLegalNotes = Mentions légales obligatoires (BR-FR-05)
+LemonFacturXNotePMD = Pénalités de retard (PMD)
+LemonFacturXNotePMT = Indemnité de recouvrement (PMT)
+LemonFacturXNoteAAB = Escompte pour paiement anticipé (AAB)

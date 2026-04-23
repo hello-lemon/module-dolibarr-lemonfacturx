@@ -34,25 +34,33 @@ $langs->loadLangs(["admin", "lemonfacturx@lemonfacturx"]);
 
 $action = GETPOST('action', 'aZ09');
 
+// Valeurs par défaut des mentions légales BR-FR (synchronisées avec xml_builder.php)
+$defaultPMD = 'En cas de retard de paiement, une pénalité égale à 3 fois le taux d\'intérêt légal sera exigible (article L.441-10 du Code de commerce).';
+$defaultPMT = 'Une indemnité forfaitaire de 40 euros sera exigible pour frais de recouvrement en cas de retard de paiement.';
+$defaultAAB = 'Pas d\'escompte pour paiement anticipé.';
+
 // Sauvegarde des paramètres
 if ($action == 'update' && $_SERVER['REQUEST_METHOD'] === 'POST') {
-	if (GETPOST('token', 'alpha') != newToken()) {
+	// CSRF : vérifier le token courant (pas newToken() qui génère un futur token)
+	if (GETPOST('token', 'alpha') !== currentToken()) {
 		accessforbidden('Bad value for CSRF token');
 	}
 	$error = 0;
 
-	$enabled = GETPOSTINT('LEMONFACTURX_ENABLED');
-	$bankAccount = GETPOSTINT('LEMONFACTURX_BANK_ACCOUNT');
-	$paymentMeans = GETPOST('LEMONFACTURX_PAYMENT_MEANS', 'alpha');
-
-	if (dolibarr_set_const($db, 'LEMONFACTURX_ENABLED', $enabled, 'int', 0, '', $conf->entity) < 0) {
-		$error++;
-	}
-	if (dolibarr_set_const($db, 'LEMONFACTURX_BANK_ACCOUNT', $bankAccount, 'int', 0, '', $conf->entity) < 0) {
-		$error++;
-	}
-	if (dolibarr_set_const($db, 'LEMONFACTURX_PAYMENT_MEANS', trim($paymentMeans), 'chaine', 0, '', $conf->entity) < 0) {
-		$error++;
+	$updates = [
+		['LEMONFACTURX_ENABLED',      GETPOSTINT('LEMONFACTURX_ENABLED'),         'int'],
+		['LEMONFACTURX_BANK_ACCOUNT', GETPOSTINT('LEMONFACTURX_BANK_ACCOUNT'),    'int'],
+		['LEMONFACTURX_PAYMENT_MEANS',trim(GETPOST('LEMONFACTURX_PAYMENT_MEANS', 'alpha')), 'chaine'],
+		['LEMONFACTURX_STRICT_MODE',  GETPOSTINT('LEMONFACTURX_STRICT_MODE'),     'int'],
+		['LEMONFACTURX_PHP_CLI_PATH', trim(GETPOST('LEMONFACTURX_PHP_CLI_PATH', 'alphanohtml')), 'chaine'],
+		['LEMONFACTURX_NOTE_PMD',     trim(GETPOST('LEMONFACTURX_NOTE_PMD', 'restricthtml')),    'chaine'],
+		['LEMONFACTURX_NOTE_PMT',     trim(GETPOST('LEMONFACTURX_NOTE_PMT', 'restricthtml')),    'chaine'],
+		['LEMONFACTURX_NOTE_AAB',     trim(GETPOST('LEMONFACTURX_NOTE_AAB', 'restricthtml')),    'chaine'],
+	];
+	foreach ($updates as $u) {
+		if (dolibarr_set_const($db, $u[0], $u[1], $u[2], 0, '', $conf->entity) < 0) {
+			$error++;
+		}
 	}
 
 	if (!$error) {
@@ -73,8 +81,6 @@ print '<input type="hidden" name="token" value="'.newToken().'">';
 print '<input type="hidden" name="action" value="update">';
 
 print '<table class="noborder centpercent">';
-
-// En-tête
 print '<tr class="liste_titre">';
 print '<td>'.$langs->trans("Parameter").'</td>';
 print '<td>'.$langs->trans("Value").'</td>';
@@ -125,6 +131,45 @@ print '</select>';
 print '</td>';
 print '</tr>';
 
+// Mode strict
+print '<tr class="oddeven">';
+print '<td>'.$langs->trans("LemonFacturXStrictMode");
+print '<br><span class="opacitymedium small">'.$langs->trans("LemonFacturXStrictModeHint").'</span>';
+print '</td>';
+print '<td>';
+$strict = getDolGlobalInt('LEMONFACTURX_STRICT_MODE', 0);
+print '<select name="LEMONFACTURX_STRICT_MODE" class="flat">';
+print '<option value="0"'.($strict == 0 ? ' selected' : '').'>'.$langs->trans("LemonFacturXStrictModeBestEffort").'</option>';
+print '<option value="1"'.($strict == 1 ? ' selected' : '').'>'.$langs->trans("LemonFacturXStrictModeStrict").'</option>';
+print '</select>';
+print '</td>';
+print '</tr>';
+
+// Chemin PHP CLI
+print '<tr class="oddeven">';
+print '<td>'.$langs->trans("LemonFacturXPhpCliPath");
+print '<br><span class="opacitymedium small">'.$langs->trans("LemonFacturXPhpCliPathHint").'</span>';
+print '</td>';
+print '<td>';
+print '<input type="text" name="LEMONFACTURX_PHP_CLI_PATH" class="flat minwidth300" value="'.dol_escape_htmltag(getDolGlobalString('LEMONFACTURX_PHP_CLI_PATH', 'php')).'" placeholder="php ou /usr/bin/php8.2">';
+print '</td>';
+print '</tr>';
+
+// Mentions légales BR-FR : PMD / PMT / AAB
+print '<tr class="liste_titre"><td colspan="2">'.$langs->trans("LemonFacturXLegalNotes").'</td></tr>';
+
+foreach ([
+	['LEMONFACTURX_NOTE_PMD', 'LemonFacturXNotePMD', $defaultPMD],
+	['LEMONFACTURX_NOTE_PMT', 'LemonFacturXNotePMT', $defaultPMT],
+	['LEMONFACTURX_NOTE_AAB', 'LemonFacturXNoteAAB', $defaultAAB],
+] as $note) {
+	$val = getDolGlobalString($note[0], $note[2]);
+	print '<tr class="oddeven">';
+	print '<td>'.$langs->trans($note[1]).'</td>';
+	print '<td><textarea name="'.$note[0].'" class="flat minwidth500" rows="3">'.dol_escape_htmltag($val).'</textarea></td>';
+	print '</tr>';
+}
+
 print '</table>';
 
 print '<br>';
@@ -147,7 +192,6 @@ print load_fiche_titre($langs->trans("LemonFacturXDiagTitle"), '', '');
 $diagErrors = [];
 $diagOk = [];
 
-// Société émettrice
 if (empty($mysoc->name)) {
 	$diagErrors[] = $langs->trans("LemonFacturXDiagSellerName");
 } else {
@@ -179,7 +223,6 @@ if (empty($mysoc->email)) {
 	$diagOk[] = $langs->trans("LemonFacturXDiagSellerEmail").' : '.dol_escape_htmltag($mysoc->email);
 }
 
-// Compte bancaire
 $bankId = getDolGlobalInt('LEMONFACTURX_BANK_ACCOUNT');
 if ($bankId > 0) {
 	$bankCheck = new Account($db);
@@ -201,7 +244,6 @@ if ($bankId > 0) {
 	$diagErrors[] = $langs->trans("LemonFacturXDiagBankNotSet");
 }
 
-// Affichage diagnostic
 print '<table class="noborder centpercent">';
 print '<tr class="liste_titre"><td colspan="2">'.$langs->trans("LemonFacturXDiagResults").'</td></tr>';
 

@@ -129,14 +129,33 @@ Le XML inclut automatiquement les notes obligatoires :
 
 ## Constantes du module
 
+Toutes sont configurables via l'écran d'administration du module (**Accueil > Configuration > Modules > LemonFacturX**).
+
 | Constante | Type | Défaut | Description |
 |---|---|---|---|
 | `LEMONFACTURX_ENABLED` | int | 1 | Activer/désactiver la conversion |
 | `LEMONFACTURX_BANK_ACCOUNT` | int | 0 | ID du compte bancaire Dolibarr |
 | `LEMONFACTURX_PAYMENT_MEANS` | string | 30 | Code moyen de paiement |
+| `LEMONFACTURX_STRICT_MODE` | int | 0 | 0 = best-effort (défaut), 1 = strict (voir ci-dessous) |
 | `LEMONFACTURX_PHP_CLI_PATH` | string | php | Chemin vers le binaire PHP CLI (voir note ci-dessous) |
+| `LEMONFACTURX_NOTE_PMD` | text | voir ci-dessous | Mention pénalités de retard (BR-FR-05) |
+| `LEMONFACTURX_NOTE_PMT` | text | voir ci-dessous | Mention indemnité de recouvrement |
+| `LEMONFACTURX_NOTE_AAB` | text | voir ci-dessous | Mention escompte anticipé |
 
 > **Note PHP CLI** : Le subprocess d'injection utilise `php` par défaut. Sur les serveurs avec plusieurs versions de PHP, ou si `php` n'est pas dans le PATH, configurer `LEMONFACTURX_PHP_CLI_PATH` avec le chemin complet (ex: `/usr/bin/php8.2`). Ne **pas** utiliser `PHP_BINARY` : en contexte php-fpm, cette constante pointe vers le binaire fpm et non le CLI.
+
+### Mode strict vs best-effort
+
+Par défaut le module est en **best-effort** : si le XML Factur-X est invalide ou si l'injection PDF échoue, un warning est affiché à l'utilisateur et le PDF classique (sans Factur-X embarqué) est conservé. Les erreurs sont loguées dans `syslog` avec le tag `LemonFacturX`.
+
+En **mode strict** (`LEMONFACTURX_STRICT_MODE=1`), la même situation retourne une erreur bloquante visible à l'utilisateur. À utiliser quand la conformité Factur-X est impérative (obligation légale, contrainte client, transmission PA/PDP downstream).
+
+Avant injection PDF, le module valide systématiquement le XML en interne :
+
+1. **Well-formed** : parse via `DOMDocument::loadXML()` pour détecter un XML cassé avant d'appeler la lib d'injection
+2. **Conformité XSD EN16931** : `DOMDocument::schemaValidate()` contre le XSD embarqué dans `vendor/atgp/factur-x/xsd/factur-x/en16931/`
+
+Si l'une de ces deux validations échoue, le comportement dépend du `LEMONFACTURX_STRICT_MODE` ci-dessus.
 
 ## Dépendances embarquées
 
@@ -170,6 +189,18 @@ xmllint --noout --schema vendor/atgp/factur-x/xsd/factur-x/en16931/Factur-X_1.08
 ```
 
 Un environnement Dolibarr de démo prêt à l'emploi est disponible via les scripts dans `demo/` (voir `demo/README.md`). Il permet de tester le module sans toucher à un Dolibarr de production.
+
+### Suite de tests automatisée
+
+`tests/run-tests.php` couvre les 10 cas de fixtures (standard, multi-TVA, TVA 0%, avoir, heures, jours, sans email, autoliquidation UE, acompte, finale avec acompte imputé) avec assertions sur TypeCode, CategoryCode, unitCode, présence/absence des blocs optionnels, montants calculés et validation XSD.
+
+```bash
+# Depuis la racine du module, sur un Dolibarr avec les fixtures chargées :
+php tests/run-tests.php
+# Exit code 0 = tous les tests passent, 1 = au moins un échec
+```
+
+À lancer après toute modification de `lib/xml_builder.php` pour vérifier qu'aucune régression n'a été introduite.
 
 ## Licence
 
