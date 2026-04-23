@@ -65,16 +65,60 @@ L'injection se fait dans un **subprocess PHP séparé** (`inject_facturx.php`) p
 |---|---|
 | BT-1 Invoice ID | `$invoice->ref` |
 | BT-2 Issue date | `$invoice->date` |
-| BT-3 Type code | 380 (facture) / 381 (avoir) |
+| BT-3 Type code | 380 (standard) / 381 (avoir) / 386 (acompte) |
 | BT-9 Due date | `$invoice->date_lim_reglement` |
 | Seller | `$mysoc` (config société) |
 | Buyer | `$invoice->thirdparty` |
 | Seller SIREN (BT-30) | 9 premiers chiffres de `$mysoc->idprof2` |
 | Seller email (BT-34) | `$mysoc->email` |
-| Buyer email (BT-49) | `$thirdparty->email` ou 1er contact |
+| Buyer email (BT-49) | `$thirdparty->email` ou 1er contact (bloc omis si vide) |
 | Lines | `$invoice->lines[]` |
+| BT-130 unitCode | Mappé depuis `$line->fk_unit` vers UN/ECE Rec 20 |
+| BT-151 CategoryCode | Calculé selon contexte (S / K / G / O / E) |
+| BT-113 TotalPrepaidAmount | `$invoice->getSumDepositsUsed()` si acompte imputé |
 | IBAN / BIC | Compte bancaire Dolibarr sélectionné |
 | Payment means | Configurable (30=virement, 58=SEPA) |
+
+### Types de facture supportés
+
+Le module détecte automatiquement le type documentaire EN16931 :
+
+| Cas Dolibarr | TypeCode EN16931 | Mapping |
+|---|---|---|
+| Facture standard | **380** | Commercial invoice |
+| `Facture::TYPE_CREDIT_NOTE` | **381** | Credit note (avoir) |
+| `Facture::TYPE_DEPOSIT` | **386** | Prepayment / advance invoice (acompte) |
+
+Une facture finale qui impute un acompte précédemment facturé écrit automatiquement `<ram:TotalPrepaidAmount>` dans le bloc de synthèse monétaire, et `<ram:DuePayableAmount>` est ajusté en conséquence (`total_ttc − acompte imputé`, minoré à zéro si négatif).
+
+### Catégories TVA (BT-151)
+
+Le code résout la catégorie EN16931 selon le contexte de la ligne, plutôt que de forcer une valeur binaire :
+
+| CategoryCode | Signification | Cas déclenchant |
+|---|---|---|
+| **S** | Standard rate | TVA > 0 |
+| **K** | Intra-community reverse charge | Acheteur UE hors FR avec TVA intra + TVA = 0 |
+| **G** | Free export outside EU | Acheteur hors UE + TVA = 0 |
+| **O** | Outside scope of tax | Émetteur non assujetti (franchise en base, micro) |
+| **E** | Exempt from tax | TVA = 0 par défaut (exonération) |
+
+Les catégories K, G, O et E génèrent systématiquement un `<ram:ExemptionReason>` avec un motif humain lisible par le destinataire.
+
+### Mapping unités UN/ECE
+
+Les quantités de ligne utilisent le code UN/ECE Rec 20 correspondant à l'unité Dolibarr (`llx_c_units.short_label`) :
+
+| Dolibarr | UN/ECE | | Dolibarr | UN/ECE |
+|---|---|---|---|---|
+| h | HUR | | kg | KGM |
+| d | DAY | | l | LTR |
+| min | MIN | | m | MTR |
+| week | WEE | | m² (`m2`) | MTK |
+| month | MON | | m³ (`m3`) | MTQ |
+| p, pc, pcs, u | C62 | | km | KMT |
+
+Si l'unité n'est pas mappée ou si `fk_unit` n'est pas renseigné, le code `C62` (pièce) est utilisé en fallback.
 
 ### Mentions légales FR (BR-FR-05)
 
@@ -115,9 +159,17 @@ La conformité PDF/A-3 est assurée par :
 
 ## Validation
 
-Tester avec [B2Brouter Factur-X Validator](https://www.b2brouter.net/fr/factur-x-validator/) :
+Validation externe via [B2Brouter Factur-X Validator](https://www.b2brouter.net/fr/factur-x-validator/) :
 - Valid XMP, Valid XSD, Valid Schematron, Valid PDF/A-3
 - Profile EN 16931 (Comfort)
+
+Validation XSD locale rapide (sur les 10 cas de test fournis dans `demo/` — standard, multi-TVA, TVA 0%, avoir, heures, jours, sans email, autoliquidation UE, acompte, facture finale avec acompte imputé) :
+
+```bash
+xmllint --noout --schema vendor/atgp/factur-x/xsd/factur-x/en16931/Factur-X_1.08_EN16931.xsd chemin/vers/facturx.xml
+```
+
+Un environnement Dolibarr de démo prêt à l'emploi est disponible via les scripts dans `demo/` (voir `demo/README.md`). Il permet de tester le module sans toucher à un Dolibarr de production.
 
 ## Licence
 

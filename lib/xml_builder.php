@@ -22,7 +22,7 @@ function lemonfacturx_build_xml($invoice, $mysoc)
 {
 	global $conf;
 
-	$typeCode = ($invoice->type == Facture::TYPE_CREDIT_NOTE) ? '381' : '380';
+	$typeCode = lemonfacturx_resolve_document_type($invoice);
 	$issueDate = date('Ymd', $invoice->date);
 	$dueDate = !empty($invoice->date_lim_reglement) ? date('Ymd', $invoice->date_lim_reglement) : $issueDate;
 	$currency = !empty($conf->currency) ? $conf->currency : 'EUR';
@@ -106,7 +106,7 @@ function lemonfacturx_build_xml($invoice, $mysoc)
 			continue;
 		}
 		$xmlLineNum++;
-		$xml .= lemonfacturx_build_line_xml($line, $xmlLineNum, $currency);
+		$xml .= lemonfacturx_build_line_xml($line, $xmlLineNum, $currency, $invoice, $buyer, $mysoc);
 	}
 
 	$xml .= '  <ram:ApplicableHeaderTradeAgreement>'."\n";
@@ -140,13 +140,14 @@ function lemonfacturx_build_xml($invoice, $mysoc)
 	}
 	$xml .= '    </ram:SpecifiedTradeSettlementPaymentMeans>'."\n";
 
-	$taxBreakdown = lemonfacturx_get_tax_breakdown($invoice);
+	$taxBreakdown = lemonfacturx_get_tax_breakdown($invoice, $buyer, $mysoc);
 	foreach ($taxBreakdown as $rate => $amounts) {
 		$xml .= '    <ram:ApplicableTradeTax>'."\n";
 		$xml .= '      <ram:CalculatedAmount>'.formatAmount($amounts['tax']).'</ram:CalculatedAmount>'."\n";
 		$xml .= '      <ram:TypeCode>VAT</ram:TypeCode>'."\n";
-		if ($amounts['categoryCode'] === 'E') {
-			$xml .= '      <ram:ExemptionReason>Exonéré de TVA</ram:ExemptionReason>'."\n";
+		// ExemptionReason émis pour toute catégorie non-standard quand un motif est disponible
+		if (!empty($amounts['exemption']) && in_array($amounts['categoryCode'], ['E', 'K', 'G', 'O', 'Z'], true)) {
+			$xml .= '      <ram:ExemptionReason>'.xmlEncode($amounts['exemption']).'</ram:ExemptionReason>'."\n";
 		}
 		$xml .= '      <ram:BasisAmount>'.formatAmount($amounts['base']).'</ram:BasisAmount>'."\n";
 		$xml .= '      <ram:CategoryCode>'.xmlEncode($amounts['categoryCode']).'</ram:CategoryCode>'."\n";
@@ -160,13 +161,7 @@ function lemonfacturx_build_xml($invoice, $mysoc)
 	$xml .= '      </ram:DueDateDateTime>'."\n";
 	$xml .= '    </ram:SpecifiedTradePaymentTerms>'."\n";
 
-	$xml .= '    <ram:SpecifiedTradeSettlementHeaderMonetarySummation>'."\n";
-	$xml .= '      <ram:LineTotalAmount>'.formatAmount($invoice->total_ht).'</ram:LineTotalAmount>'."\n";
-	$xml .= '      <ram:TaxBasisTotalAmount>'.formatAmount($invoice->total_ht).'</ram:TaxBasisTotalAmount>'."\n";
-	$xml .= '      <ram:TaxTotalAmount currencyID="'.xmlEncode($currency).'">'.formatAmount($invoice->total_tva).'</ram:TaxTotalAmount>'."\n";
-	$xml .= '      <ram:GrandTotalAmount>'.formatAmount($invoice->total_ttc).'</ram:GrandTotalAmount>'."\n";
-	$xml .= '      <ram:DuePayableAmount>'.formatAmount($invoice->total_ttc).'</ram:DuePayableAmount>'."\n";
-	$xml .= '    </ram:SpecifiedTradeSettlementHeaderMonetarySummation>'."\n";
+	$xml .= lemonfacturx_build_monetary_summation_xml($invoice, $currency);
 
 	$xml .= '  </ram:ApplicableHeaderTradeSettlement>'."\n";
 
@@ -178,8 +173,16 @@ function lemonfacturx_build_xml($invoice, $mysoc)
 
 /**
  * Génère le XML d'une ligne de facture
+ *
+ * @param object $line        Ligne de facture Dolibarr
+ * @param int    $lineNum     Numéro de ligne séquentiel
+ * @param string $currency    Devise (ex: EUR)
+ * @param object $invoice     Facture Dolibarr (nécessaire pour déterminer la catégorie TVA)
+ * @param object $thirdparty  Tiers acheteur
+ * @param object $mysoc       Société émettrice
+ * @return string XML
  */
-function lemonfacturx_build_line_xml($line, $lineNum, $currency)
+function lemonfacturx_build_line_xml($line, $lineNum, $currency, $invoice, $thirdparty, $mysoc)
 {
 	$xml = '  <ram:IncludedSupplyChainTradeLineItem>'."\n";
 
@@ -196,10 +199,11 @@ function lemonfacturx_build_line_xml($line, $lineNum, $currency)
 	$xml .= '      <ram:Name>'.xmlEncode($desc).'</ram:Name>'."\n";
 	$xml .= '    </ram:SpecifiedTradeProduct>'."\n";
 
-	$qty = (float) $line->qty;
-	$vatRate = (float) $line->tva_tx;
+	$qty       = (float) $line->qty;
+	$vatRate   = (float) $line->tva_tx;
 	$lineTotal = (float) $line->total_ht;
-	$taxCategoryCode = ($vatRate == 0) ? 'E' : 'S';
+	$unitCode  = lemonfacturx_map_unit_code($line);
+	$taxCat    = lemonfacturx_resolve_tax_category($line, $invoice, $thirdparty, $mysoc);
 	// Prix net unitaire : total_ht / qty pour tenir compte des remises
 	$unitPrice = ($qty != 0) ? $lineTotal / $qty : (float) $line->subprice;
 
@@ -210,13 +214,13 @@ function lemonfacturx_build_line_xml($line, $lineNum, $currency)
 	$xml .= '    </ram:SpecifiedLineTradeAgreement>'."\n";
 
 	$xml .= '    <ram:SpecifiedLineTradeDelivery>'."\n";
-	$xml .= '      <ram:BilledQuantity unitCode="C62">'.formatAmount($qty).'</ram:BilledQuantity>'."\n";
+	$xml .= '      <ram:BilledQuantity unitCode="'.xmlEncode($unitCode).'">'.formatAmount($qty).'</ram:BilledQuantity>'."\n";
 	$xml .= '    </ram:SpecifiedLineTradeDelivery>'."\n";
 
 	$xml .= '    <ram:SpecifiedLineTradeSettlement>'."\n";
 	$xml .= '      <ram:ApplicableTradeTax>'."\n";
 	$xml .= '        <ram:TypeCode>VAT</ram:TypeCode>'."\n";
-	$xml .= '        <ram:CategoryCode>'.xmlEncode($taxCategoryCode).'</ram:CategoryCode>'."\n";
+	$xml .= '        <ram:CategoryCode>'.xmlEncode($taxCat['code']).'</ram:CategoryCode>'."\n";
 	$xml .= '        <ram:RateApplicablePercent>'.formatAmount($vatRate).'</ram:RateApplicablePercent>'."\n";
 	$xml .= '      </ram:ApplicableTradeTax>'."\n";
 	$xml .= '      <ram:SpecifiedTradeSettlementLineMonetarySummation>'."\n";
@@ -230,9 +234,10 @@ function lemonfacturx_build_line_xml($line, $lineNum, $currency)
 }
 
 /**
- * Calcule la ventilation TVA par taux
+ * Calcule la ventilation TVA par taux, avec catégorie EN16931 qualifiée
+ * (S / K / G / O / E) et motif d'exonération associé.
  */
-function lemonfacturx_get_tax_breakdown($invoice)
+function lemonfacturx_get_tax_breakdown($invoice, $thirdparty, $mysoc)
 {
 	$breakdown = [];
 
@@ -242,12 +247,17 @@ function lemonfacturx_get_tax_breakdown($invoice)
 			continue;
 		}
 		$rate = (string) ((float) $line->tva_tx);
-		$categoryCode = ((float) $line->tva_tx == 0) ? 'E' : 'S';
+		$taxCat = lemonfacturx_resolve_tax_category($line, $invoice, $thirdparty, $mysoc);
 		if (!isset($breakdown[$rate])) {
-			$breakdown[$rate] = ['base' => 0, 'tax' => 0, 'categoryCode' => $categoryCode];
+			$breakdown[$rate] = [
+				'base'         => 0,
+				'tax'          => 0,
+				'categoryCode' => $taxCat['code'],
+				'exemption'    => $taxCat['exemption'],
+			];
 		}
 		$breakdown[$rate]['base'] += (float) $line->total_ht;
-		$breakdown[$rate]['tax'] += (float) $line->total_tva;
+		$breakdown[$rate]['tax']  += (float) $line->total_tva;
 	}
 
 	return $breakdown;
@@ -327,15 +337,185 @@ function lemonfacturx_build_trade_party_xml($role, $name, $address, $zip, $city,
 	$xml .= '        <ram:CityName>'.xmlEncode($city).'</ram:CityName>'."\n";
 	$xml .= '        <ram:CountryID>'.xmlEncode($country).'</ram:CountryID>'."\n";
 	$xml .= '      </ram:PostalTradeAddress>'."\n";
-	$xml .= '      <ram:URIUniversalCommunication>'."\n";
-	$xml .= '        <ram:URIID schemeID="EM">'.xmlEncode($email).'</ram:URIID>'."\n";
-	$xml .= '      </ram:URIUniversalCommunication>'."\n";
+	// BR-FR-13 / BT-49 : n'émettre le bloc URI que si l'email est réellement renseigné.
+	// Sinon le XML contient une URIID vide qui est rejetée par certains validateurs.
+	if (!empty($email)) {
+		$xml .= '      <ram:URIUniversalCommunication>'."\n";
+		$xml .= '        <ram:URIID schemeID="EM">'.xmlEncode($email).'</ram:URIID>'."\n";
+		$xml .= '      </ram:URIUniversalCommunication>'."\n";
+	}
 	if (!empty($vat)) {
 		$xml .= '      <ram:SpecifiedTaxRegistration>'."\n";
 		$xml .= '        <ram:ID schemeID="VA">'.xmlEncode($vat).'</ram:ID>'."\n";
 		$xml .= '      </ram:SpecifiedTaxRegistration>'."\n";
 	}
 	$xml .= '    </ram:'.$tag.'>'."\n";
+
+	return $xml;
+}
+
+/**
+ * Mappe l'unité Dolibarr d'une ligne vers le code UN/ECE Rec 20 attendu par Factur-X.
+ * Cherche via $line->fk_unit dans llx_c_units, fallback C62 (pièce / one) si absent.
+ *
+ * @param object $line Ligne de facture Dolibarr
+ * @return string Code UN/ECE (ex: HUR, DAY, MTR, KGM, C62...)
+ */
+function lemonfacturx_map_unit_code($line)
+{
+	static $map = [
+		'h'      => 'HUR', // heure
+		'min'    => 'MIN', // minute
+		'd'      => 'DAY', // jour
+		'week'   => 'WEE', // semaine
+		'wk'     => 'WEE',
+		'month'  => 'MON', // mois
+		'm'      => 'MTR', // mètre (conflit avec min/month résolu par unit_type)
+		'cm'     => 'CMT',
+		'mm'     => 'MMT',
+		'km'     => 'KMT',
+		'm2'     => 'MTK', // mètre carré
+		'm3'     => 'MTQ', // mètre cube
+		'kg'     => 'KGM',
+		'g'      => 'GRM',
+		't'      => 'TNE', // tonne métrique
+		'l'      => 'LTR',
+		'cl'     => 'CLT',
+		'ml'     => 'MLT',
+		'p'      => 'C62', // pièce
+		'pc'     => 'C62',
+		'pcs'    => 'C62',
+		'piece'  => 'C62',
+		'u'      => 'C62', // unité
+	];
+
+	$fkUnit = !empty($line->fk_unit) ? (int) $line->fk_unit : 0;
+	if ($fkUnit <= 0) {
+		return 'C62';
+	}
+
+	global $db;
+	$sql = "SELECT short_label, unit_type FROM ".MAIN_DB_PREFIX."c_units WHERE rowid=".$fkUnit;
+	$res = $db->query($sql);
+	if (!$res) {
+		return 'C62';
+	}
+	$obj = $db->fetch_object($res);
+	if (!$obj || empty($obj->short_label)) {
+		return 'C62';
+	}
+
+	$code = strtolower(trim($obj->short_label));
+	// Désambiguïser 'm' : time=minute (MIN), size=mètre (MTR)
+	if ($code === 'm') {
+		return ($obj->unit_type === 'time') ? 'MIN' : 'MTR';
+	}
+	return $map[$code] ?? 'C62';
+}
+
+/**
+ * Résout la catégorie TVA EN16931 (VATEX / CategoryCode) selon le contexte métier.
+ *
+ * @param object $line        Ligne de facture
+ * @param object $invoice     Facture Dolibarr
+ * @param object $thirdparty  Tiers acheteur
+ * @param object $mysoc       Société émettrice
+ * @return array ['code' => 'S|K|G|O|E|Z', 'exemption' => string|null]
+ */
+function lemonfacturx_resolve_tax_category($line, $invoice, $thirdparty, $mysoc)
+{
+	$tvaTx = (float) $line->tva_tx;
+
+	// Société émettrice non assujettie (franchise en base, micro-entreprise) : O = hors champ
+	if (isset($mysoc->tva_assuj) && (int) $mysoc->tva_assuj === 0) {
+		return ['code' => 'O', 'exemption' => 'TVA non applicable, art. 293 B du CGI'];
+	}
+
+	// TVA > 0 : standard
+	if ($tvaTx > 0) {
+		return ['code' => 'S', 'exemption' => null];
+	}
+
+	// TVA = 0 : qualifier selon le contexte
+	$buyerCountry = strtoupper(!empty($thirdparty->country_code) ? $thirdparty->country_code : 'FR');
+	$buyerVat     = !empty($thirdparty->tva_intra) ? $thirdparty->tva_intra : '';
+
+	static $euCountries = [
+		'AT','BE','BG','CY','CZ','DE','DK','EE','ES','FI','FR','GR','HR','HU',
+		'IE','IT','LT','LU','LV','MT','NL','PL','PT','RO','SE','SI','SK',
+	];
+
+	// Export hors UE : G
+	if (!in_array($buyerCountry, $euCountries, true)) {
+		return ['code' => 'G', 'exemption' => 'Export hors Union européenne'];
+	}
+
+	// UE hors FR avec TVA intra : K (autoliquidation)
+	if ($buyerCountry !== 'FR' && !empty($buyerVat)) {
+		return ['code' => 'K', 'exemption' => 'Autoliquidation intracommunautaire, TVA due par le preneur'];
+	}
+
+	// FR ou UE sans TVA intra et TVA=0 : exonération par défaut
+	return ['code' => 'E', 'exemption' => 'Exonéré de TVA'];
+}
+
+/**
+ * Résout le TypeCode documentaire EN16931 selon le type de facture Dolibarr.
+ *
+ * @param object $invoice Facture Dolibarr
+ * @return string '380' (standard), '381' (avoir), '386' (acompte)
+ */
+function lemonfacturx_resolve_document_type($invoice)
+{
+	if ((int) $invoice->type === (int) Facture::TYPE_CREDIT_NOTE) {
+		return '381';
+	}
+	if ((int) $invoice->type === (int) Facture::TYPE_DEPOSIT) {
+		return '386'; // EN16931 : prepayment / advance invoice
+	}
+	return '380';
+}
+
+/**
+ * Retourne le montant total déjà prépayé via acomptes imputés sur la facture finale.
+ *
+ * @param object $invoice Facture Dolibarr
+ * @return float Montant prépayé ≥ 0
+ */
+function lemonfacturx_get_prepaid_amount($invoice)
+{
+	if (!is_object($invoice)) {
+		return 0.0;
+	}
+	if (method_exists($invoice, 'getSumDepositsUsed')) {
+		return max(0.0, (float) $invoice->getSumDepositsUsed());
+	}
+	return 0.0;
+}
+
+/**
+ * Génère le bloc SpecifiedTradeSettlementHeaderMonetarySummation.
+ * Inclut TotalPrepaidAmount si un acompte a été imputé, ajuste DuePayableAmount.
+ */
+function lemonfacturx_build_monetary_summation_xml($invoice, $currency)
+{
+	$lineTotal     = (float) $invoice->total_ht;
+	$taxBasisTotal = (float) $invoice->total_ht;
+	$taxTotal      = (float) $invoice->total_tva;
+	$grandTotal    = (float) $invoice->total_ttc;
+	$totalPrepaid  = lemonfacturx_get_prepaid_amount($invoice);
+	$duePayable    = max(0.0, $grandTotal - $totalPrepaid);
+
+	$xml  = '    <ram:SpecifiedTradeSettlementHeaderMonetarySummation>'."\n";
+	$xml .= '      <ram:LineTotalAmount>'.formatAmount($lineTotal).'</ram:LineTotalAmount>'."\n";
+	$xml .= '      <ram:TaxBasisTotalAmount>'.formatAmount($taxBasisTotal).'</ram:TaxBasisTotalAmount>'."\n";
+	$xml .= '      <ram:TaxTotalAmount currencyID="'.xmlEncode($currency).'">'.formatAmount($taxTotal).'</ram:TaxTotalAmount>'."\n";
+	$xml .= '      <ram:GrandTotalAmount>'.formatAmount($grandTotal).'</ram:GrandTotalAmount>'."\n";
+	if ($totalPrepaid > 0) {
+		$xml .= '      <ram:TotalPrepaidAmount>'.formatAmount($totalPrepaid).'</ram:TotalPrepaidAmount>'."\n";
+	}
+	$xml .= '      <ram:DuePayableAmount>'.formatAmount($duePayable).'</ram:DuePayableAmount>'."\n";
+	$xml .= '    </ram:SpecifiedTradeSettlementHeaderMonetarySummation>'."\n";
 
 	return $xml;
 }
