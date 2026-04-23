@@ -37,3 +37,16 @@ LemonFacturXNoteAAB = Escompte pour paiement anticipé (AAB)
 LemonFacturXUpdateAvailable = Nouvelle version disponible
 LemonFacturXUpdateAvailableMsg = Une version plus récente du module est publiée sur GitHub (%s, actuelle : %s).
 LemonFacturXUpdateSeeRelease = Voir la release et les instructions de mise à jour
+
+LemonFacturXAboutTitle = Développé et maintenu par Lemon
+LemonFacturXAboutIntro = LemonFacturX est un module open source gratuit, développé par <a href="https://hellolemon.fr" target="_blank" rel="noopener"><strong>Lemon</strong></a>, agence web et communication à Clermont-Ferrand (63) depuis 2012. Nous accompagnons TPE, PME et indépendants sur Dolibarr, la facturation électronique et l'IA métier.
+LemonFacturXAboutSvc1Title = Modules Dolibarr sur mesure
+LemonFacturXAboutSvc1Desc = CRM, pointeuse NFC, facturation électronique, intégrations API, automatisations — on développe le module qui manque à votre ERP.
+LemonFacturXAboutSvc2Title = Facturation électronique
+LemonFacturXAboutSvc2Desc = Mise en conformité Factur-X EN16931, raccordement aux Plateformes Agréées (PA/PDP), accompagnement réforme 2026-2027.
+LemonFacturXAboutSvc3Title = IA au service des pros
+LemonFacturXAboutSvc3Desc = Extraction automatique de factures fournisseurs, rapprochement bancaire, génération de contenus, assistants métier — on met l'IA au travail pour vous faire gagner du temps.
+LemonFacturXAboutSvc4Title = Déploiement et hébergement Dolibarr
+LemonFacturXAboutSvc4Desc = Installation, migration, paramétrage métier, formation de vos équipes.
+LemonFacturXAboutCTA = Parlons de votre projet
+LemonFacturXAboutLocation = Clermont-Ferrand (63) — hello@hellolemon.fr

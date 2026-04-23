@@ -328,5 +328,21 @@ if (empty($diagErrors)) {
 
 print '</table>';
 
+// === Bloc "À propos de Lemon" — vitrine éditeur ===
+print '<div style="margin:30px 0;padding:20px 25px;border:1px solid #e0e0e0;border-left:4px solid #FFD21F;border-radius:6px;background:linear-gradient(135deg,#fffef7 0%,#fafafa 100%);">';
+print '<h3 style="margin:0 0 10px 0;color:#333;">'.$langs->trans("LemonFacturXAboutTitle").'</h3>';
+print '<p style="margin:0 0 12px 0;color:#555;">'.$langs->trans("LemonFacturXAboutIntro").'</p>';
+print '<ul style="margin:0 0 15px 20px;color:#555;">';
+print '<li><strong>'.$langs->trans("LemonFacturXAboutSvc1Title").'</strong> : '.$langs->trans("LemonFacturXAboutSvc1Desc").'</li>';
+print '<li><strong>'.$langs->trans("LemonFacturXAboutSvc2Title").'</strong> : '.$langs->trans("LemonFacturXAboutSvc2Desc").'</li>';
+print '<li><strong>'.$langs->trans("LemonFacturXAboutSvc3Title").'</strong> : '.$langs->trans("LemonFacturXAboutSvc3Desc").'</li>';
+print '<li><strong>'.$langs->trans("LemonFacturXAboutSvc4Title").'</strong> : '.$langs->trans("LemonFacturXAboutSvc4Desc").'</li>';
+print '</ul>';
+print '<p style="margin:0;">';
+print '<a href="https://hellolemon.fr" target="_blank" rel="noopener" class="butAction" style="text-decoration:none;">'.$langs->trans("LemonFacturXAboutCTA").'</a>';
+print ' <span style="color:#999;margin-left:15px;">'.$langs->trans("LemonFacturXAboutLocation").'</span>';
+print '</p>';
+print '</div>';
+
 llxFooter();
 $db->close();
