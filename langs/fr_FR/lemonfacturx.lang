@@ -33,3 +33,7 @@ LemonFacturXLegalNotes = Mentions légales obligatoires (BR-FR-05)
 LemonFacturXNotePMD = Pénalités de retard (PMD)
 LemonFacturXNotePMT = Indemnité de recouvrement (PMT)
 LemonFacturXNoteAAB = Escompte pour paiement anticipé (AAB)
+
+LemonFacturXUpdateAvailable = Nouvelle version disponible
+LemonFacturXUpdateAvailableMsg = Une version plus récente du module est publiée sur GitHub (%s, actuelle : %s).
+LemonFacturXUpdateSeeRelease = Voir la release et les instructions de mise à jour

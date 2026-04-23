@@ -34,6 +34,61 @@ $langs->loadLangs(["admin", "lemonfacturx@lemonfacturx"]);
 
 $action = GETPOST('action', 'aZ09');
 
+/**
+ * Interroge l'API GitHub pour la dernière release publiée du module.
+ * Résultat mis en cache 24h dans une constante Dolibarr pour ne pas taper
+ * l'API à chaque ouverture de la page admin.
+ *
+ * @param object $db               Handle DB Dolibarr
+ * @param string $currentVersion   Version actuelle du module (ex: "1.1.0")
+ * @return array|null              ['version' => 'x.y.z', 'url' => 'https://...']
+ *                                 si une version plus récente existe, null sinon
+ */
+function lemonfacturx_check_latest_release($db, $currentVersion)
+{
+	$now = time();
+	$cacheRaw = getDolGlobalString('LEMONFACTURX_UPDATE_CHECK_CACHE', '');
+	$cache = !empty($cacheRaw) ? json_decode($cacheRaw, true) : null;
+
+	$latest = null;
+	$htmlUrl = '';
+	if (is_array($cache) && isset($cache['ts']) && ($now - (int) $cache['ts']) < 86400) {
+		$latest  = $cache['version'] ?? null;
+		$htmlUrl = $cache['url']     ?? '';
+	} else {
+		$url = 'https://api.github.com/repos/hello-lemon/module-dolibarr-lemonfacturx/releases/latest';
+		$ch = curl_init($url);
+		curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+		curl_setopt($ch, CURLOPT_USERAGENT, 'LemonFacturX-UpdateCheck');
+		curl_setopt($ch, CURLOPT_TIMEOUT, 5);
+		curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
+		$json = @curl_exec($ch);
+		$httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+		curl_close($ch);
+
+		if ($httpCode !== 200 || empty($json)) {
+			return null;
+		}
+		$data = json_decode($json, true);
+		if (!is_array($data) || empty($data['tag_name'])) {
+			return null;
+		}
+		$latest  = ltrim($data['tag_name'], 'v');
+		$htmlUrl = $data['html_url'] ?? '';
+
+		dolibarr_set_const($db, 'LEMONFACTURX_UPDATE_CHECK_CACHE', json_encode([
+			'ts'      => $now,
+			'version' => $latest,
+			'url'     => $htmlUrl,
+		]), 'chaine', 0, '', 0);
+	}
+
+	if (!empty($latest) && version_compare($latest, $currentVersion, '>')) {
+		return ['version' => $latest, 'url' => $htmlUrl];
+	}
+	return null;
+}
+
 // Valeurs par défaut des mentions légales BR-FR (synchronisées avec xml_builder.php)
 $defaultPMD = 'En cas de retard de paiement, une pénalité égale à 3 fois le taux d\'intérêt légal sera exigible (article L.441-10 du Code de commerce).';
 $defaultPMT = 'Une indemnité forfaitaire de 40 euros sera exigible pour frais de recouvrement en cas de retard de paiement.';
@@ -75,6 +130,18 @@ llxHeader('', $langs->trans("LemonFacturXSetup"));
 
 $linkback = '<a href="'.DOL_URL_ROOT.'/admin/modules.php?restore_lastsearch_values=1">'.$langs->trans("BackToModuleList").'</a>';
 print load_fiche_titre($langs->trans("LemonFacturXSetup"), $linkback, 'title_setup');
+
+// Bandeau "Nouvelle version disponible" si le check GitHub remonte une version > locale
+require_once dirname(__DIR__).'/core/modules/modLemonFacturX.class.php';
+$modDesc = new modLemonFacturX($db);
+$updateInfo = lemonfacturx_check_latest_release($db, $modDesc->version);
+if ($updateInfo !== null) {
+	print '<div class="warning" style="margin:8px 0;padding:10px;border-left:4px solid #e67e22;background:#fff3e0;">';
+	print '<strong>'.$langs->trans("LemonFacturXUpdateAvailable").'</strong> : ';
+	print $langs->trans("LemonFacturXUpdateAvailableMsg", dol_escape_htmltag($updateInfo['version']), dol_escape_htmltag($modDesc->version));
+	print ' <a href="'.dol_escape_htmltag($updateInfo['url']).'" target="_blank" rel="noopener">'.$langs->trans("LemonFacturXUpdateSeeRelease").'</a>';
+	print '</div>';
+}
 
 print '<form method="POST" action="'.dol_escape_htmltag($_SERVER["PHP_SELF"]).'">';
 print '<input type="hidden" name="token" value="'.newToken().'">';
