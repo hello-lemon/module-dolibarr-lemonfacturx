@@ -158,6 +158,11 @@ class ActionsLemonFacturX
 		}
 
 		dol_syslog('LemonFacturX: PDF Factur-X généré pour '.$invoice->ref, LOG_INFO);
+		$successMsg = 'Facture électronique Factur-X EN16931 embarquée dans le PDF '.$invoice->ref.'.';
+		if (!empty($warnings)) {
+			$successMsg .= ' '.count($warnings).' avertissement'.(count($warnings) > 1 ? 's' : '').' non bloquant'.(count($warnings) > 1 ? 's' : '').' ci-dessus : compléter la fiche pour une conformité totale BR-FR.';
+		}
+		setEventMessages($successMsg, null, 'mesgs');
 
 		return 0;
 	}
