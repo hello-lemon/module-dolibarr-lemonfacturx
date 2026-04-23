@@ -26,7 +26,7 @@ class modLemonFacturX extends DolibarrModules
 		$this->name = preg_replace('/^mod/i', '', get_class($this));
 		$this->description = "Génération automatique de factures Factur-X EN16931";
 		$this->descriptionlong = "Injecte un XML CrossIndustryInvoice EN16931 dans chaque PDF facture client généré, pour conformité Factur-X.";
-		$this->version = '1.0.0';
+		$this->version = '1.1.0';
 		$this->const_name = 'MAIN_MODULE_'.strtoupper($this->name);
 		$this->picto = 'bill';
 		$this->editor_name = 'Lemon';
@@ -58,6 +58,11 @@ class modLemonFacturX extends DolibarrModules
 			array('LEMONFACTURX_ENABLED', 'int', '1', 'Activer la conversion Factur-X', 1, 'current', 0),
 			array('LEMONFACTURX_BANK_ACCOUNT', 'int', '0', 'ID du compte bancaire pour IBAN/BIC', 1, 'current', 0),
 			array('LEMONFACTURX_PAYMENT_MEANS', 'chaine', '30', 'Code moyen de paiement (30=virement, 58=SEPA)', 1, 'current', 0),
+			array('LEMONFACTURX_STRICT_MODE', 'int', '0', 'Mode erreur : 0 = best-effort, 1 = strict bloquant', 1, 'current', 0),
+			array('LEMONFACTURX_PHP_CLI_PATH', 'chaine', 'php', 'Chemin du binaire PHP CLI pour subprocess injection', 1, 'current', 0),
+			array('LEMONFACTURX_NOTE_PMD', 'chaine', '', 'Mention légale pénalités de retard (BR-FR-05, default appliqué si vide)', 1, 'current', 0),
+			array('LEMONFACTURX_NOTE_PMT', 'chaine', '', 'Mention légale indemnité de recouvrement (default appliqué si vide)', 1, 'current', 0),
+			array('LEMONFACTURX_NOTE_AAB', 'chaine', '', 'Mention légale escompte anticipé (default appliqué si vide)', 1, 'current', 0),
 		);
 
 		if (!isset($conf->lemonfacturx) || !isset($conf->lemonfacturx->enabled)) {

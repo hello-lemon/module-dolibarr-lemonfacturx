@@ -1,6 +1,6 @@
 # LemonFacturX
 
-Module Dolibarr pour la génération automatique de factures **Factur-X EN16931** (PDF/A-3 avec XML CrossIndustryInvoice embarqué).
+**Version 1.1.0** — Module Dolibarr pour la génération automatique de factures **Factur-X EN16931** (PDF/A-3 avec XML CrossIndustryInvoice embarqué).
 
 Chaque facture client générée dans Dolibarr est automatiquement convertie au format Factur-X, conforme aux règles **BR-FR** (norme XP Z12-012 V1.2.0) pour la facturation électronique française.
 
@@ -10,24 +10,43 @@ Développé et maintenu par [Lemon](https://hellolemon.fr), agence web et commun
 
 - **Dolibarr** 22.0.x
 - **PHP** 8.2+
-- **Constante Dolibarr** `MAIN_PDF_FORCE_FONT` = `pdfahelvetica` (pour embarquer les polices, requis PDF/A-3)
+- **Fonction `exec()`** activée (subprocess d'injection PDF)
+- **Constante Dolibarr** `MAIN_PDF_FORCE_FONT` = `pdfahelvetica` (polices embarquées, requis PDF/A-3)
 
 ## Installation
 
 1. Copier le dossier `lemonfacturx/` dans le répertoire custom de Dolibarr :
 
+   ```bash
+   cp -r lemonfacturx/ /var/www/html/custom/
+   chown -R www-data:www-data /var/www/html/custom/lemonfacturx
+   ```
+
+2. Activer le module : **Accueil > Configuration > Modules**
+3. Configurer via **Accueil > Configuration > Modules > LemonFacturX** :
+   - Compte bancaire (IBAN/BIC)
+   - Moyen de paiement par défaut (virement, SEPA, prélèvement)
+   - Mode de gestion d'erreur (best-effort / strict)
+   - Éventuellement chemin PHP CLI et mentions légales
+4. Poser `MAIN_PDF_FORCE_FONT = pdfahelvetica` via **Accueil > Configuration > Divers**
+5. Vérifier le **diagnostic** en bas de la page de configuration du module (coches vertes = OK)
+
+## Mise à jour
+
 ```bash
-cp -r lemonfacturx/ /var/www/html/custom/
+# Sauvegarder l'ancienne version (au cas où)
+cp -r /var/www/html/custom/lemonfacturx /var/www/html/custom/lemonfacturx.bak
+
+# Récupérer la nouvelle version
+git clone https://github.com/hello-lemon/module-dolibarr-lemonfacturx.git /tmp/lemonfacturx-new
+rm -rf /var/www/html/custom/lemonfacturx
+mv /tmp/lemonfacturx-new /var/www/html/custom/lemonfacturx
 chown -R www-data:www-data /var/www/html/custom/lemonfacturx
 ```
 
-2. Activer le module dans Dolibarr : **Accueil > Configuration > Modules**
-3. Configurer le module dans **Accueil > Configuration > Modules > LemonFacturX** :
-   - Sélectionner le compte bancaire (IBAN/BIC)
-   - Choisir le moyen de paiement par défaut (virement, SEPA, prélèvement)
-4. Vérifier le diagnostic en bas de la page de configuration (toutes les coches vertes = OK)
-5. Ajouter dans "Divers" la constante `MAIN_PDF_FORCE_FONT` avec `pdfahelvetica` comme valeur
-**
+Dolibarr ne notifie pas automatiquement des mises à jour d'un module custom. Pour rester à jour, [suivre les releases GitHub](https://github.com/hello-lemon/module-dolibarr-lemonfacturx/releases) ou faire un `git pull` périodique si le module est versionné.
+
+Consulter la section **Changelog** en bas de ce README pour connaître les changements et migrations éventuelles.
 
 ## Architecture
 
@@ -201,6 +220,36 @@ php tests/run-tests.php
 ```
 
 À lancer après toute modification de `lib/xml_builder.php` pour vérifier qu'aucune régression n'a été introduite.
+
+## Changelog
+
+### 1.1.0 (avril 2026)
+
+Module **distribué publiquement sur GitHub**. Mise à niveau pour couvrir tous les cas EN16931 et fiabiliser le comportement en production partagée.
+
+- **Conformité EN16931 renforcée** :
+  - Support des factures d'acompte (`Facture::TYPE_DEPOSIT` → TypeCode `386`)
+  - Support de `TotalPrepaidAmount` sur les factures finales ayant imputé un acompte (via `getSumDepositsUsed()`)
+  - CategoryCode TVA intelligent selon le contexte : `S` / `K` (autoliquidation UE) / `G` (export hors UE) / `O` (hors champ) / `E` (exonéré), au lieu du binaire S/E précédent
+  - Mapping des unités de ligne Dolibarr vers les codes UN/ECE Rec 20 (HUR, DAY, KGM, MTR...) au lieu de C62 en dur
+  - `URIUniversalCommunication` rendu conditionnel : plus de bloc vide si l'email est absent
+  - `ExemptionReason` généré dynamiquement selon le motif réel
+- **Qualité module distribué** :
+  - Validation XML interne avant injection PDF (well-formed + XSD EN16931 local)
+  - Nouveau mode `LEMONFACTURX_STRICT_MODE` (0 = best-effort, 1 = bloquant)
+  - Message unique consolidé à l'utilisateur : vert si injection OK, orange avec liste des warnings sinon
+  - CSRF de la page admin aligné sur le pattern Dolibarr 22 (`currentToken()`)
+  - Exposition dans l'UI admin des mentions légales PMD/PMT/AAB et du chemin PHP CLI
+- **Outillage** :
+  - `demo/` : environnement Dolibarr de démo (fixtures pour tests Factur-X + fixtures marketing 6 mois)
+  - `tests/run-tests.php` : suite de tests automatisés couvrant 10 cas × 8 assertions (80/80 PASS)
+  - `docs/spec-acomptes.md` : spécification détaillée du support des acomptes
+
+Aucune migration DB nécessaire. Les anciennes constantes restent compatibles. Les nouvelles constantes (`STRICT_MODE`, `PHP_CLI_PATH`, `NOTE_PMD/PMT/AAB`) ont des valeurs par défaut raisonnables.
+
+### 1.0.0
+
+Version initiale : génération XML EN16931, injection PDF/A-3, conformité B2Brouter sur le cas standard.
 
 ## Licence
 
