@@ -124,6 +124,16 @@ Le code résout la catégorie EN16931 selon le contexte de la ligne, plutôt que
 
 Les catégories K, G, O et E génèrent systématiquement un `<ram:ExemptionReason>` avec un motif humain lisible par le destinataire.
 
+**Catégories EN16931 non encore supportées** :
+
+| Code | Cas | Comportement actuel |
+|---|---|---|
+| **AE** | Autoliquidation domestique (sous-traitance bâtiment CGI art. 283 nonies, déchets ferreux, composants électroniques) | Retombe sur `S` si TVA > 0 ou `E` si TVA 0%. La résolution automatique nécessiterait un flag manuel par ligne ou par tiers ; patch prévu sur demande. |
+| **Z** | Zero rated (livres, presse, certaines livraisons spéciales) | Retombe sur `E`. Cas très rare en pratique. |
+| **L** / **M** | TVA Canaries / Ceuta-Melilla | Non pertinent pour la France métropolitaine, non implémenté. |
+
+Pour les 99 % des cas FR + UE standard (standard rate, autoliquidation intracommunautaire, export, franchise en base, exonération simple), le mapping automatique actuel suffit.
+
 ### Mapping unités UN/ECE
 
 Les quantités de ligne utilisent le code UN/ECE Rec 20 correspondant à l'unité Dolibarr (`llx_c_units.short_label`) :
