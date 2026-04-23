@@ -47,7 +47,7 @@ $consts = [
 	'MAIN_INFO_SOCIETE_COUNTRY' => '1:FR:France',
 	'MAIN_INFO_SIREN'           => '812456782',
 	'MAIN_INFO_SIRET'           => '81245678200018',
-	'MAIN_INFO_TVA_INTRA'       => 'FR27812456782',
+	'MAIN_INFO_TVAINTRA'        => 'FR27812456782', // Nom de constante Dolibarr réel (sans underscore)
 	'MAIN_INFO_SOCIETE_MAIL'    => 'contact@immoreno.fr',
 	'MAIN_INFO_SOCIETE_TEL'     => '04 71 48 32 10',
 	'MAIN_INFO_SOCIETE_WEB'     => 'www.immoreno.fr',
@@ -67,6 +67,13 @@ if ($bankId > 0) {
 	$sql = "UPDATE ".MAIN_DB_PREFIX."bank_account SET label='Compte pro Crédit Agricole Aurillac', bank='Crédit Agricole Centre France' WHERE rowid=$bankId";
 	$db->query($sql);
 	echo "  compte bancaire relabélisé\n";
+
+	// Affichage des modes de paiement sur les factures PDF (supprime le warning
+	// "mode CHQ défini mais config Facture incomplète"). CHQ=-1 = bénéficiaire
+	// = mysoc->name. RIB = id du compte bancaire pour virement.
+	dolibarr_set_const($db, 'FACTURE_CHQ_NUMBER', -1, 'chaine', 0, '', 1);
+	dolibarr_set_const($db, 'FACTURE_RIB_NUMBER', $bankId, 'chaine', 0, '', 1);
+	echo "  FACTURE_CHQ_NUMBER + FACTURE_RIB_NUMBER posées\n";
 }
 
 // ============================================================

@@ -57,7 +57,7 @@ $consts = [
 	'MAIN_INFO_SOCIETE_COUNTRY' => '1:FR:France',
 	'MAIN_INFO_SIREN'           => '732829320',
 	'MAIN_INFO_SIRET'           => '73282932000074',
-	'MAIN_INFO_TVA_INTRA'       => 'FR44732829320',
+	'MAIN_INFO_TVAINTRA'        => 'FR44732829320', // Nom de constante Dolibarr réel (sans underscore)
 	'MAIN_INFO_SOCIETE_MAIL'    => 'contact@lemon-demo.local',
 ];
 foreach ($consts as $k => $v) {
