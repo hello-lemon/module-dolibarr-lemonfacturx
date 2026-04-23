@@ -39,8 +39,9 @@ LemonFacturX est un module Dolibarr qui convertit automatiquement les PDF factur
 ### Surface exposée
 
 - **Hook `afterPDFCreation`** : exécuté dans le contexte d'une génération PDF facture (utilisateur authentifié)
-- **Page de configuration admin** : `admin/setup.php`, réservée aux admins via `accessforbidden()`
+- **Page de configuration admin** : `admin/setup.php`, réservée aux admins via `accessforbidden()` + protection CSRF sur le POST de mise à jour
 - **Script CLI** : `lib/inject_facturx.php` — protégé contre l'accès HTTP direct par `php_sapi_name() === 'cli'`
+- **Appel HTTP sortant unique** : vérification de la dernière release GitHub via `api.github.com`, au chargement de la page de configuration admin, avec cache 24h et timeout 5s (aucune donnée locale envoyée, uniquement une requête `GET` anonyme)
 - **Aucun endpoint web exposé publiquement**
 
 ### Ce qui est **hors** modèle de menace
@@ -73,13 +74,36 @@ Protections :
 - Le XML CII est **construit** programmatiquement à partir des objets Dolibarr (`$invoice`, `$mysoc`, `$thirdparty`). Aucune donnée utilisateur n'est injectée en brut : les valeurs sont échappées avec `htmlspecialchars(..., ENT_XML1 | ENT_QUOTES, 'UTF-8')` via les helpers du module.
 - Aucun parsing de XML externe n'est effectué dans le chemin critique.
 
+### Validation XML interne avant injection
+
+Depuis la v1.1.0, avant d'écrire le XML sur disque et d'invoquer le subprocess d'injection, le module valide systématiquement :
+
+1. **XML well-formed** via `DOMDocument::loadXML()`. Un XML cassé (cas peu probable puisque la génération est programmatique, mais défense en profondeur) est rejeté avant qu'il atteigne la lib tierce.
+2. **Conformité XSD EN16931** via `DOMDocument::schemaValidate()` contre le schéma embarqué dans `vendor/atgp/factur-x/xsd/factur-x/en16931/Factur-X_1.08_EN16931.xsd`. Les erreurs sont loggées dans `dol_syslog` pour diagnostic.
+
+En mode `LEMONFACTURX_STRICT_MODE=1`, ces validations échouées bloquent la génération avec une erreur visible. En mode best-effort (défaut), un warning est affiché et le PDF classique reste disponible (fail-open). Cette option permet de choisir explicitement la politique fail-open vs fail-closed selon le besoin de conformité.
+
+### CSRF de la page admin
+
+Le POST de mise à jour des constantes dans `admin/setup.php` est protégé par vérification du token CSRF standard Dolibarr (`currentToken()`), en plus du check `$user->admin`. Le token est regénéré par Dolibarr à chaque rendu et la comparaison utilise `currentToken()` (valeur de la soumission en cours), pas `newToken()` qui génère le token de la **prochaine** soumission.
+
 ### Patch FPDF pour PDF/A-3
 
 La bibliothèque `setasign/fpdf` vendored reçoit un patch pour ajouter le flag `/F 4` aux annotations (conformité PDF/A-3). Ce patch est appliqué au build du vendor et n'introduit pas de vecteur d'attaque.
 
 ### Constantes Dolibarr
 
-Les constantes du module (`LEMONFACTURX_ENABLED`, `LEMONFACTURX_BANK_ACCOUNT`, `LEMONFACTURX_PAYMENT_MEANS`, `LEMONFACTURX_PHP_CLI_PATH`) sont stockées en clair dans `llx_const`, convention Dolibarr. Aucune de ces constantes n'est un secret (le PHP CLI path est public par nature, les autres sont des paramètres métier).
+Toutes les constantes du module sont stockées en clair dans `llx_const` (convention Dolibarr). Aucune n'est un secret.
+
+| Constante | Nature |
+|---|---|
+| `LEMONFACTURX_ENABLED` | Flag d'activation |
+| `LEMONFACTURX_BANK_ACCOUNT` | ID du compte bancaire configuré |
+| `LEMONFACTURX_PAYMENT_MEANS` | Code moyen de paiement |
+| `LEMONFACTURX_STRICT_MODE` | Politique erreur (best-effort / strict) |
+| `LEMONFACTURX_PHP_CLI_PATH` | Chemin du binaire PHP (validé par regex) |
+| `LEMONFACTURX_NOTE_PMD/PMT/AAB` | Mentions légales BR-FR-05 |
+| `LEMONFACTURX_UPDATE_CHECK_CACHE` | JSON cache de la dernière version GitHub (TTL 24h) |
 
 ## Dépendances vendored
 

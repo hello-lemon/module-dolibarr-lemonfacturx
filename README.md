@@ -74,9 +74,15 @@ L'injection se fait dans un **subprocess PHP séparé** (`inject_facturx.php`) p
 
 ### Sécurité
 
-- **`inject_facturx.php`** est protégé contre l'accès HTTP direct (vérification `php_sapi_name() === 'cli'`)
-- **`exec()`** : le module vérifie que la fonction est disponible avant de l'appeler (certains hébergeurs la désactivent)
-- Le binaire PHP CLI est configurable via la constante `LEMONFACTURX_PHP_CLI_PATH` (défaut : `php`)
+- `inject_facturx.php` est protégé contre l'accès HTTP direct (`php_sapi_name() === 'cli'`)
+- `exec()` vérifié avant appel, binaire PHP CLI configurable via `LEMONFACTURX_PHP_CLI_PATH`, chemin validé par regex et `is_executable()` si absolu
+- Validation XML interne avant injection PDF (well-formed + XSD EN16931)
+- Mode `LEMONFACTURX_STRICT_MODE` : choisir fail-open (best-effort) vs fail-closed (strict)
+- CSRF du POST admin aligné sur `currentToken()` Dolibarr 22
+- Aucun endpoint web public exposé
+- Un seul appel HTTP sortant : check de version GitHub toutes les 24h (cache en DB)
+
+Modèle de menace, protections détaillées et processus de signalement : voir [SECURITY.md](SECURITY.md). Contact disclosure : **hello@hellolemon.fr**.
 
 ## Données mappées (Dolibarr → Factur-X)
 
