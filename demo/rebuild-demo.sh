@@ -106,6 +106,14 @@ EOF
 echo "[5/6] Exécution fixtures"
 php "$MODULE_ROOT/demo/fixtures.php"
 
+# Les scripts PHP sont exécutés en CLI root, donc les dossiers/fichiers créés
+# dans documents/ (facture/*, propale/*, etc.) appartiennent à root. php-fpm
+# tourne en www-data et ne peut plus y écrire (regénération PDF, upload...).
+# On rebascule tout à www-data pour que l'UI Dolibarr fonctionne normalement.
+chown -R www-data:www-data "$DOL_DATA"
+find "$DOL_DATA" -type d -exec chmod 2775 {} +
+find "$DOL_DATA" -type f -exec chmod 664 {} + 2>/dev/null || true
+
 echo "[6/6] Snapshot → $SNAPSHOT"
 mysqldump --single-transaction --routines --triggers "$DB_NAME" 2>/dev/null | gzip > "$SNAPSHOT"
 ls -lh "$SNAPSHOT"
