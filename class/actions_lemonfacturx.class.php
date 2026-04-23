@@ -56,11 +56,12 @@ class ActionsLemonFacturX
 
 		$strict = getDolGlobalInt('LEMONFACTURX_STRICT_MODE', 0);
 
-		// Vérifier les infos obligatoires (on continue même si incomplet en best-effort)
+		// Vérifier les infos obligatoires (on continue même si incomplet en best-effort).
+		// Les warnings ne sont PAS affichés individuellement : ils sont consolidés
+		// dans le message final (vert si aucun, orange avec la liste si présents).
 		$warnings = lemonfacturx_check_mandatory($invoice, $mysoc);
 		foreach ($warnings as $w) {
 			dol_syslog('LemonFacturX WARNING: '.$w, LOG_WARNING);
-			setEventMessages($w, null, 'warnings');
 		}
 
 		// Générer le XML
@@ -158,11 +159,20 @@ class ActionsLemonFacturX
 		}
 
 		dol_syslog('LemonFacturX: PDF Factur-X généré pour '.$invoice->ref, LOG_INFO);
-		$successMsg = 'Facture électronique Factur-X EN16931 embarquée dans le PDF '.$invoice->ref.'.';
-		if (!empty($warnings)) {
-			$successMsg .= ' '.count($warnings).' avertissement'.(count($warnings) > 1 ? 's' : '').' non bloquant'.(count($warnings) > 1 ? 's' : '').' ci-dessus : compléter la fiche pour une conformité totale BR-FR.';
+
+		// Message unique consolidé : vert si aucun warning, orange sinon avec la liste.
+		if (empty($warnings)) {
+			setEventMessages('Facture électronique Factur-X EN16931 embarquée dans le PDF '.$invoice->ref.'.', null, 'mesgs');
+		} else {
+			$msg = 'Facture électronique Factur-X EN16931 embarquée dans le PDF '.$invoice->ref.'. ';
+			$msg .= count($warnings).' avertissement'.(count($warnings) > 1 ? 's' : '').' non bloquant'.(count($warnings) > 1 ? 's' : '').' à corriger pour une conformité totale BR-FR :<br>';
+			$msg .= '<ul style="margin:4px 0 0 0;padding-left:20px;">';
+			foreach ($warnings as $w) {
+				$msg .= '<li>'.dol_escape_htmltag($w).'</li>';
+			}
+			$msg .= '</ul>';
+			setEventMessages($msg, null, 'warnings');
 		}
-		setEventMessages($successMsg, null, 'mesgs');
 
 		return 0;
 	}
