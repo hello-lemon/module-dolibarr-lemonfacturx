@@ -29,7 +29,7 @@ class ProfileHandler
     {
         $xpath = new \DOMXPath($document);
         $elements = $xpath->query('//rsm:ExchangedDocumentContext/ram:GuidelineSpecifiedDocumentContextParameter/ram:ID');
-        if (0 == $elements->length) {
+        if (false === $elements || 0 === $elements->length) {
             throw new ProfileResolutionException(
                 'This XML is not a Factur-X XML because it misses the XML '.
                 'tag ExchangedDocumentContext/GuidelineSpecifiedDocumentContextParameter/ram:ID.');
@@ -45,18 +45,6 @@ class ProfileHandler
         }
 
         return $profile;
-    }
-
-    /**
-     * @param string $xml XML content
-     *
-     * @throws \Exception
-     *
-     * @return string
-     */
-    public static function getFromXml(string $xml): string
-    {
-        return static::get(new \DOMDocument($xml));
     }
 
     public static function has(string $profile): bool

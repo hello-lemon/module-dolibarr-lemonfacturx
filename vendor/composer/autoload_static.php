@@ -4,46 +4,46 @@
 
 namespace Composer\Autoload;
 
-class ComposerStaticInit43f893951ef8e00a78e63909b2a35af0
+class ComposerStaticInit785d60b5888a22e19fd8fb2735f3e5e5
 {
     public static $files = array (
         '0e6d7bf4a5811bfa5cf40c5ccd6fae6a' => __DIR__ . '/..' . '/symfony/polyfill-mbstring/bootstrap.php',
     );
 
     public static $prefixLengthsPsr4 = array (
-        's' => 
+        's' =>
         array (
             'setasign\\Fpdi\\' => 14,
         ),
-        'S' => 
+        'S' =>
         array (
             'Symfony\\Polyfill\\Mbstring\\' => 26,
         ),
-        'A' => 
+        'A' =>
         array (
             'Atgp\\FacturX\\' => 13,
         ),
     );
 
     public static $prefixDirsPsr4 = array (
-        'setasign\\Fpdi\\' => 
+        'setasign\\Fpdi\\' =>
         array (
             0 => __DIR__ . '/..' . '/setasign/fpdi/src',
         ),
-        'Symfony\\Polyfill\\Mbstring\\' => 
+        'Symfony\\Polyfill\\Mbstring\\' =>
         array (
             0 => __DIR__ . '/..' . '/symfony/polyfill-mbstring',
         ),
-        'Atgp\\FacturX\\' => 
+        'Atgp\\FacturX\\' =>
         array (
             0 => __DIR__ . '/..' . '/atgp/factur-x/src',
         ),
     );
 
     public static $prefixesPsr0 = array (
-        'S' => 
+        'S' =>
         array (
-            'Smalot\\PdfParser\\' => 
+            'Smalot\\PdfParser\\' =>
             array (
                 0 => __DIR__ . '/..' . '/smalot/pdfparser/src',
             ),
@@ -58,10 +58,10 @@ class ComposerStaticInit43f893951ef8e00a78e63909b2a35af0
     public static function getInitializer(ClassLoader $loader)
     {
         return \Closure::bind(function () use ($loader) {
-            $loader->prefixLengthsPsr4 = ComposerStaticInit43f893951ef8e00a78e63909b2a35af0::$prefixLengthsPsr4;
-            $loader->prefixDirsPsr4 = ComposerStaticInit43f893951ef8e00a78e63909b2a35af0::$prefixDirsPsr4;
-            $loader->prefixesPsr0 = ComposerStaticInit43f893951ef8e00a78e63909b2a35af0::$prefixesPsr0;
-            $loader->classMap = ComposerStaticInit43f893951ef8e00a78e63909b2a35af0::$classMap;
+            $loader->prefixLengthsPsr4 = ComposerStaticInit785d60b5888a22e19fd8fb2735f3e5e5::$prefixLengthsPsr4;
+            $loader->prefixDirsPsr4 = ComposerStaticInit785d60b5888a22e19fd8fb2735f3e5e5::$prefixDirsPsr4;
+            $loader->prefixesPsr0 = ComposerStaticInit785d60b5888a22e19fd8fb2735f3e5e5::$prefixesPsr0;
+            $loader->classMap = ComposerStaticInit785d60b5888a22e19fd8fb2735f3e5e5::$classMap;
 
         }, null, ClassLoader::class);
     }

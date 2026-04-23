@@ -1,6 +1,6 @@
 # LemonFacturX
 
-**Version 1.1.0** — Module Dolibarr pour la génération automatique de factures **Factur-X EN16931** (PDF/A-3 avec XML CrossIndustryInvoice embarqué).
+**Version 1.1.1** — Module Dolibarr pour la génération automatique de factures **Factur-X EN16931** (PDF/A-3 avec XML CrossIndustryInvoice embarqué).
 
 Chaque facture client générée dans Dolibarr est automatiquement convertie au format Factur-X, conforme aux règles **BR-FR** (norme XP Z12-012 V1.2.0) pour la facturation électronique française.
 
@@ -238,6 +238,20 @@ php tests/run-tests.php
 À lancer après toute modification de `lib/xml_builder.php` pour vérifier qu'aucune régression n'a été introduite.
 
 ## Changelog
+
+### 1.1.1 (avril 2026)
+
+Maintenance des dépendances vendored, suite aux [PRs `.gitattributes`](https://github.com/hello-lemon/module-dolibarr-lemonfacturx/issues/3) fusionnées upstream par William Desportes :
+
+| Lib | Avant | Après |
+|---|---|---|
+| `atgp/factur-x` | v3.0.0 | **v3.3.0** |
+| `smalot/pdfparser` | v2.12.3 | **v2.12.5** |
+| `setasign/fpdf` | 1.8.2 | **1.8.6** (patch `/F 4` pour PDF/A-3 réappliqué) |
+| `setasign/fpdi` | v2.6.4 | **v2.6.6** |
+| `symfony/polyfill-mbstring` | v1.33.0 | **v1.36.0** |
+
+Dossier `vendor/` plus léger et sans fichiers de dev (grâce aux `.gitattributes` upstream). 80/80 tests automatisés passent toujours, aucune régression.
 
 ### 1.1.0 (avril 2026)
 

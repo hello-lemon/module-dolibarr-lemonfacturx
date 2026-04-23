@@ -74,6 +74,14 @@ This project is licensed under MIT License
 Changelog
 ---------
 
+- v3.3.0 : 2026-04-17
+    - Fix automatic tests for PHP 7.4
+    - Add .gitattributes to exclude files from composer
+- v3.2.0 : 2026-03-12
+    - Cover library with automatic tests
+- v3.1.0 : 2026-02-25
+    - (reader/validator/writer) Handle invalid XML
+    - (utils) Remove useless ProfileHandler::getFromXml() method
 - v3.0.0 : 2026-01-28
     - (reader/validator/writer) Throw custom exception to facilitate exception handling
 - v2.5.0 : 2026-01-09
