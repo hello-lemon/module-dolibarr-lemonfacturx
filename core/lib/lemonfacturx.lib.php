@@ -563,3 +563,58 @@ function formatAmount($amount)
 {
 	return number_format((float) $amount, 2, '.', '');
 }
+
+/**
+ * Interroge l'API GitHub pour la dernière release publiée du module.
+ * Résultat mis en cache 24h dans une constante Dolibarr pour ne pas taper
+ * l'API à chaque ouverture de la page admin.
+ *
+ * @param object $db               Handle DB Dolibarr
+ * @param string $currentVersion   Version actuelle du module (ex: "1.1.0")
+ * @return array|null              ['version' => 'x.y.z', 'url' => 'https://...']
+ *                                 si une version plus récente existe, null sinon
+ */
+function lemonfacturx_check_latest_release($db, $currentVersion)
+{
+	$now = time();
+	$cacheRaw = getDolGlobalString('LEMONFACTURX_UPDATE_CHECK_CACHE', '');
+	$cache = !empty($cacheRaw) ? json_decode($cacheRaw, true) : null;
+
+	$latest = null;
+	$htmlUrl = '';
+	if (is_array($cache) && isset($cache['ts']) && ($now - (int) $cache['ts']) < 86400) {
+		$latest  = $cache['version'] ?? null;
+		$htmlUrl = $cache['url']     ?? '';
+	} else {
+		$url = 'https://api.github.com/repos/hello-lemon/module-dolibarr-lemonfacturx/releases/latest';
+		$ch = curl_init($url);
+		curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+		curl_setopt($ch, CURLOPT_USERAGENT, 'LemonFacturX-UpdateCheck');
+		curl_setopt($ch, CURLOPT_TIMEOUT, 5);
+		curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
+		$json = @curl_exec($ch);
+		$httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+		curl_close($ch);
+
+		if ($httpCode !== 200 || empty($json)) {
+			return null;
+		}
+		$data = json_decode($json, true);
+		if (!is_array($data) || empty($data['tag_name'])) {
+			return null;
+		}
+		$latest  = ltrim($data['tag_name'], 'v');
+		$htmlUrl = $data['html_url'] ?? '';
+
+		dolibarr_set_const($db, 'LEMONFACTURX_UPDATE_CHECK_CACHE', json_encode([
+			'ts'      => $now,
+			'version' => $latest,
+			'url'     => $htmlUrl,
+		]), 'chaine', 0, '', 0);
+	}
+
+	if (!empty($latest) && version_compare($latest, $currentVersion, '>')) {
+		return ['version' => $latest, 'url' => $htmlUrl];
+	}
+	return null;
+}

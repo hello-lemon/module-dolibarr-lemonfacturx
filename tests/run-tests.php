@@ -38,7 +38,7 @@ if (!$loaded) {
 }
 
 require_once DOL_DOCUMENT_ROOT.'/compta/facture/class/facture.class.php';
-require_once __DIR__.'/../lib/xml_builder.php';
+require_once __DIR__.'/../core/lib/lemonfacturx.lib.php';
 
 $xsdPath = __DIR__.'/../vendor/atgp/factur-x/xsd/factur-x/en16931/Factur-X_1.08_EN16931.xsd';
 

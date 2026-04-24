@@ -40,7 +40,7 @@ LemonFacturX est un module Dolibarr qui convertit automatiquement les PDF factur
 
 - **Hook `afterPDFCreation`** : exécuté dans le contexte d'une génération PDF facture (utilisateur authentifié)
 - **Page de configuration admin** : `admin/setup.php`, réservée aux admins via `accessforbidden()` + protection CSRF sur le POST de mise à jour
-- **Script CLI** : `lib/inject_facturx.php` — protégé contre l'accès HTTP direct par `php_sapi_name() === 'cli'`
+- **Script CLI** : `scripts/inject_facturx.php` : protégé contre l'accès HTTP direct par `php_sapi_name() === 'cli'`
 - **Appel HTTP sortant unique** : vérification de la dernière release GitHub via `api.github.com`, au chargement de la page de configuration admin, avec cache 24h et timeout 5s (aucune donnée locale envoyée, uniquement une requête `GET` anonyme)
 - **Aucun endpoint web exposé publiquement**
 

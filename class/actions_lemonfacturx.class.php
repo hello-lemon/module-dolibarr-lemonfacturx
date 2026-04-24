@@ -52,7 +52,7 @@ class ActionsLemonFacturX
 		}
 
 		$modulePath = dirname(__DIR__);
-		require_once $modulePath.'/lib/xml_builder.php';
+		require_once $modulePath.'/core/lib/lemonfacturx.lib.php';
 
 		$strict = getDolGlobalInt('LEMONFACTURX_STRICT_MODE', 0);
 
@@ -103,7 +103,7 @@ class ActionsLemonFacturX
 			return $this->handleNonFatal('LemonFacturX: le binaire PHP configuré est introuvable ou non exécutable : '.$phpBin, $strict);
 		}
 
-		$scriptPath = escapeshellarg($modulePath.'/lib/inject_facturx.php');
+		$scriptPath = escapeshellarg($modulePath.'/scripts/inject_facturx.php');
 		$pdfArg = escapeshellarg($file);
 		$xmlArg = escapeshellarg($xmlTmpFile);
 

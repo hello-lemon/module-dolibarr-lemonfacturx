@@ -235,7 +235,7 @@ php tests/run-tests.php
 # Exit code 0 = tous les tests passent, 1 = au moins un échec
 ```
 
-À lancer après toute modification de `lib/xml_builder.php` pour vérifier qu'aucune régression n'a été introduite.
+À lancer après toute modification de `core/lib/lemonfacturx.lib.php` pour vérifier qu'aucune régression n'a été introduite.
 
 ## Changelog
 

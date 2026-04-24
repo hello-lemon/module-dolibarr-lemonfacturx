@@ -17,13 +17,13 @@ Il ne traite pas explicitement :
 
 ## Fichiers à modifier
 
-- `lib/xml_builder.php` (principal)
+- `core/lib/lemonfacturx.lib.php` (principal)
 - `class/actions_lemonfacturx.class.php` (warnings métier)
 - `README.md` (documenter le support)
 
 ## Problème actuel
 
-Dans `lib/xml_builder.php:25`, la résolution du type est un ternaire :
+Dans `core/lib/lemonfacturx.lib.php:25`, la résolution du type est un ternaire :
 
 ```php
 $typeCode = ($invoice->type == Facture::TYPE_CREDIT_NOTE) ? '381' : '380';
@@ -46,7 +46,7 @@ Supporter deux cas distincts :
 
 ## Décision d'architecture
 
-Arrêter de mélanger logique métier Dolibarr, mapping Factur-X et rendu XML. Créer les fonctions dédiées suivantes dans `lib/xml_builder.php` :
+Arrêter de mélanger logique métier Dolibarr, mapping Factur-X et rendu XML. Créer les fonctions dédiées suivantes dans `core/lib/lemonfacturx.lib.php` :
 
 - `lemonfacturx_resolve_document_type($invoice)`
 - `lemonfacturx_is_deposit_invoice($invoice)`
@@ -117,7 +117,7 @@ Contraintes : jamais négatif, toujours float, ne casse pas si la méthode n'exi
 
 ### Génération des totaux monétaires
 
-Extraire la logique actuelle (`lib/xml_builder.php:163-169`) dans une fonction dédiée :
+Extraire la logique actuelle (`core/lib/lemonfacturx.lib.php:163-169`) dans une fonction dédiée :
 
 ```php
 function lemonfacturx_build_monetary_summation_xml($invoice, $currency)
