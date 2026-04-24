@@ -592,6 +592,8 @@ function lemonfacturx_check_latest_release($db, $currentVersion)
 		curl_setopt($ch, CURLOPT_USERAGENT, 'LemonFacturX-UpdateCheck');
 		curl_setopt($ch, CURLOPT_TIMEOUT, 5);
 		curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
+		curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, true);
+		curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 2);
 		$json = @curl_exec($ch);
 		$httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
 		curl_close($ch);
@@ -605,6 +607,10 @@ function lemonfacturx_check_latest_release($db, $currentVersion)
 		}
 		$latest  = ltrim($data['tag_name'], 'v');
 		$htmlUrl = $data['html_url'] ?? '';
+		// Validation défensive : on n'accepte qu'une URL github.com officielle du repo
+		if (!preg_match('#^https://github\.com/hello-lemon/module-dolibarr-lemonfacturx/#', $htmlUrl)) {
+			$htmlUrl = 'https://github.com/hello-lemon/module-dolibarr-lemonfacturx/releases';
+		}
 
 		dolibarr_set_const($db, 'LEMONFACTURX_UPDATE_CHECK_CACHE', json_encode([
 			'ts'      => $now,
