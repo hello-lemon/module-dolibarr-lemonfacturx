@@ -70,16 +70,7 @@ class ActionsLemonFacturX
 		// Validation interne avant injection : well-formed + XSD EN16931
 		$validationError = $this->validateXml($xml, $modulePath);
 		if ($validationError !== null) {
-			$msg = 'LemonFacturX: XML invalide — '.$validationError;
-			dol_syslog($msg, LOG_ERR);
-			if ($strict) {
-				$this->error = $msg;
-				$this->errors[] = $msg;
-				setEventMessages($msg, null, 'errors');
-				return -1;
-			}
-			setEventMessages($msg.' (mode best-effort : PDF classique conservé sans Factur-X)', null, 'warnings');
-			return 0;
+			return $this->handleNonFatal('LemonFacturX: XML invalide : '.$validationError, $strict, 'PDF classique conservé sans Factur-X');
 		}
 
 		// Écrire le XML dans un fichier temporaire pour le subprocess d'injection
@@ -89,15 +80,7 @@ class ActionsLemonFacturX
 		// Injection via process séparé pour éviter le conflit FPDF/TCPDF
 		if (!function_exists('exec')) {
 			@unlink($xmlTmpFile);
-			$msg = 'LemonFacturX: la fonction exec() est désactivée sur ce serveur';
-			dol_syslog($msg, LOG_ERR);
-			if ($strict) {
-				$this->error = $msg;
-				setEventMessages($msg, null, 'errors');
-				return -1;
-			}
-			setEventMessages($msg.' (mode best-effort : PDF classique conservé)', null, 'warnings');
-			return 0;
+			return $this->handleNonFatal('LemonFacturX: la fonction exec() est désactivée sur ce serveur', $strict);
 		}
 
 		$phpBin = getDolGlobalString('LEMONFACTURX_PHP_CLI_PATH', 'php');
@@ -109,30 +92,15 @@ class ActionsLemonFacturX
 		// qui partiraient en boucle d'erreur et pour afficher un message clair.
 		if (!preg_match('#^[A-Za-z0-9/._-]+$#', $phpBin)) {
 			@unlink($xmlTmpFile);
-			$msg = 'LemonFacturX: LEMONFACTURX_PHP_CLI_PATH contient des caractères interdits (attendu : chemin alphanumérique, « / . _ - »)';
-			dol_syslog($msg.' — valeur reçue : '.$phpBin, LOG_ERR);
-			if ($strict) {
-				$this->error = $msg;
-				setEventMessages($msg, null, 'errors');
-				return -1;
-			}
-			setEventMessages($msg.' (mode best-effort : PDF classique conservé)', null, 'warnings');
-			return 0;
+			dol_syslog('LemonFacturX: LEMONFACTURX_PHP_CLI_PATH valeur reçue : '.$phpBin, LOG_ERR);
+			return $this->handleNonFatal('LemonFacturX: LEMONFACTURX_PHP_CLI_PATH contient des caractères interdits (attendu : chemin alphanumérique, « / . _ - »)', $strict);
 		}
 		// Si l'admin a fourni un chemin absolu, on vérifie qu'il pointe vraiment
 		// vers un exécutable. Cas relatif ("php", "php8.2") : on laisse passer
 		// au shell qui résoudra via PATH.
 		if (strpos($phpBin, '/') !== false && !is_executable($phpBin)) {
 			@unlink($xmlTmpFile);
-			$msg = 'LemonFacturX: le binaire PHP configuré est introuvable ou non exécutable : '.$phpBin;
-			dol_syslog($msg, LOG_ERR);
-			if ($strict) {
-				$this->error = $msg;
-				setEventMessages($msg, null, 'errors');
-				return -1;
-			}
-			setEventMessages($msg.' (mode best-effort : PDF classique conservé)', null, 'warnings');
-			return 0;
+			return $this->handleNonFatal('LemonFacturX: le binaire PHP configuré est introuvable ou non exécutable : '.$phpBin, $strict);
 		}
 
 		$scriptPath = escapeshellarg($modulePath.'/lib/inject_facturx.php');
@@ -146,16 +114,7 @@ class ActionsLemonFacturX
 		@unlink($xmlTmpFile);
 
 		if ($returnCode !== 0) {
-			$msg = 'LemonFacturX: injection PDF échouée — '.implode(' ', $output);
-			dol_syslog($msg, LOG_ERR);
-			if ($strict) {
-				$this->error = $msg;
-				$this->errors[] = $msg;
-				setEventMessages($msg, null, 'errors');
-				return -1;
-			}
-			setEventMessages($msg.' (mode best-effort : PDF classique conservé)', null, 'warnings');
-			return 0;
+			return $this->handleNonFatal('LemonFacturX: injection PDF échouée : '.implode(' ', $output), $strict);
 		}
 
 		dol_syslog('LemonFacturX: PDF Factur-X généré pour '.$invoice->ref, LOG_INFO);
@@ -174,6 +133,29 @@ class ActionsLemonFacturX
 			setEventMessages($msg, null, 'warnings');
 		}
 
+		return 0;
+	}
+
+	/**
+	 * Centralise le traitement d'une erreur non fatale du hook :
+	 *  - mode strict : remonte une erreur bloquante et renvoie -1
+	 *  - mode best-effort : affiche un warning, laisse le PDF classique en place, renvoie 0
+	 *
+	 * @param string $msg           Message d'erreur (sera loggué + affiché)
+	 * @param int    $strict        0 = best-effort, 1 = strict bloquant
+	 * @param string $fallbackHint  Précision affichée en best-effort entre parenthèses
+	 * @return int                  -1 (strict) ou 0 (best-effort)
+	 */
+	protected function handleNonFatal($msg, $strict, $fallbackHint = 'PDF classique conservé')
+	{
+		dol_syslog($msg, LOG_ERR);
+		if ($strict) {
+			$this->error = $msg;
+			$this->errors[] = $msg;
+			setEventMessages($msg, null, 'errors');
+			return -1;
+		}
+		setEventMessages($msg.' (mode best-effort : '.$fallbackHint.')', null, 'warnings');
 		return 0;
 	}
 

@@ -395,7 +395,7 @@ function lemonfacturx_map_unit_code($line)
 	}
 
 	global $db;
-	$sql = "SELECT short_label, unit_type FROM ".MAIN_DB_PREFIX."c_units WHERE rowid=".$fkUnit;
+	$sql = "SELECT short_label, unit_type FROM ".MAIN_DB_PREFIX."c_units WHERE rowid=".((int) $fkUnit);
 	$res = $db->query($sql);
 	if (!$res) {
 		return 'C62';
@@ -484,13 +484,10 @@ function lemonfacturx_resolve_document_type($invoice)
  */
 function lemonfacturx_get_prepaid_amount($invoice)
 {
-	if (!is_object($invoice)) {
+	if (!method_exists($invoice, 'getSumDepositsUsed')) {
 		return 0.0;
 	}
-	if (method_exists($invoice, 'getSumDepositsUsed')) {
-		return max(0.0, (float) $invoice->getSumDepositsUsed());
-	}
-	return 0.0;
+	return max(0.0, (float) $invoice->getSumDepositsUsed());
 }
 
 /**
