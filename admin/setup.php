@@ -283,6 +283,7 @@ print '<li><strong>'.$langs->trans("LemonFacturXAboutSvc1Title").'</strong> : '.
 print '<li><strong>'.$langs->trans("LemonFacturXAboutSvc2Title").'</strong> : '.$langs->trans("LemonFacturXAboutSvc2Desc").'</li>';
 print '<li><strong>'.$langs->trans("LemonFacturXAboutSvc3Title").'</strong> : '.$langs->trans("LemonFacturXAboutSvc3Desc").'</li>';
 print '<li><strong>'.$langs->trans("LemonFacturXAboutSvc4Title").'</strong> : '.$langs->trans("LemonFacturXAboutSvc4Desc").'</li>';
+print '<li><strong>'.$langs->trans("LemonFacturXAboutSvc5Title").'</strong> : '.$langs->trans("LemonFacturXAboutSvc5Desc").'</li>';
 print '</ul>';
 print '<p style="margin:0;">';
 print '<a href="https://hellolemon.fr" target="_blank" rel="noopener" class="butAction" style="text-decoration:none;">'.$langs->trans("LemonFacturXAboutCTA").'</a>';
