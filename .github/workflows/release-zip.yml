@@ -1,0 +1,36 @@
+name: Build release ZIP
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build-zip:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build clean ZIP (dossier racine = lemonfacturx/)
+        run: |
+          mkdir -p /tmp/build/lemonfacturx
+          rsync -a \
+            --exclude='.git' \
+            --exclude='.github' \
+            --exclude='.gitignore' \
+            --exclude='.gitattributes' \
+            --exclude='*.md.bak' \
+            --exclude='/tests' \
+            --exclude='/demo' \
+            ./ /tmp/build/lemonfacturx/
+          cd /tmp/build && zip -r "/tmp/lemonfacturx-${GITHUB_REF_NAME}.zip" lemonfacturx/
+          unzip -l "/tmp/lemonfacturx-${GITHUB_REF_NAME}.zip" | head -20
+
+      - name: Attach ZIP to release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: /tmp/lemonfacturx-*.zip
+          fail_on_unmatched_files: true

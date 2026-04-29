@@ -15,21 +15,35 @@ Développé et maintenu par [Lemon](https://hellolemon.fr), agence web et commun
 
 ## Installation
 
-1. Copier le dossier `lemonfacturx/` dans le répertoire custom de Dolibarr :
+1. **Télécharger l'archive de la dernière release** sur
+   [github.com/hello-lemon/module-dolibarr-lemonfacturx/releases/latest](https://github.com/hello-lemon/module-dolibarr-lemonfacturx/releases/latest).
+
+   Récupérer l'asset `lemonfacturx-vX.Y.Z.zip` attaché à la release (et **non** le
+   bouton "Download ZIP" du code source — voir l'avertissement plus bas).
+
+2. Décompresser et copier le dossier `lemonfacturx/` dans le répertoire custom de Dolibarr :
 
    ```bash
+   unzip lemonfacturx-vX.Y.Z.zip
    cp -r lemonfacturx/ /var/www/html/custom/
    chown -R www-data:www-data /var/www/html/custom/lemonfacturx
    ```
 
-2. Activer le module : **Accueil > Configuration > Modules**
-3. Configurer via **Accueil > Configuration > Modules > LemonFacturX** :
+3. Activer le module : **Accueil > Configuration > Modules**
+4. Configurer via **Accueil > Configuration > Modules > LemonFacturX** :
    - Compte bancaire (IBAN/BIC)
    - Moyen de paiement par défaut (virement, SEPA, prélèvement)
    - Mode de gestion d'erreur (best-effort / strict)
    - Éventuellement chemin PHP CLI et mentions légales
-4. Poser `MAIN_PDF_FORCE_FONT = pdfahelvetica` via **Accueil > Configuration > Divers**
-5. Vérifier le **diagnostic** en bas de la page de configuration du module (coches vertes = OK)
+5. Poser `MAIN_PDF_FORCE_FONT = pdfahelvetica` via **Accueil > Configuration > Divers**
+6. Vérifier le **diagnostic** en bas de la page de configuration du module (coches vertes = OK)
+
+> **Attention** — N'utilisez pas le bouton "Download ZIP" de la page d'accueil du dépôt
+> (le code source brut). Cette archive se décompresse en `module-dolibarr-lemonfacturx-main/`
+> au lieu de `lemonfacturx/`, ce qui casse l'installation Dolibarr (erreur *"You requested
+> a website or a page that does not exists"* en ouvrant la page de configuration du module).
+> Téléchargez l'asset ZIP de la release, ou clonez directement avec `git clone`
+> (cf. section [Mise à jour](#mise-à-jour)).
 
 ## Mise à jour
 
