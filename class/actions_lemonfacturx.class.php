@@ -90,7 +90,7 @@ class ActionsLemonFacturX
 		// valeur piégée finit en "command not found"), mais on refuse explicitement
 		// les valeurs avec caractères exotiques pour éviter les fautes de frappe
 		// qui partiraient en boucle d'erreur et pour afficher un message clair.
-		if (!preg_match('#^[A-Za-z0-9/._-]+$#', $phpBin)) {
+		if (!preg_match('#^[A-Za-z0-9/._:()\\\\-]+$#', $phpBin)) {
 			@unlink($xmlTmpFile);
 			dol_syslog('LemonFacturX: LEMONFACTURX_PHP_CLI_PATH valeur reçue : '.$phpBin, LOG_ERR);
 			return $this->handleNonFatal('LemonFacturX: LEMONFACTURX_PHP_CLI_PATH contient des caractères interdits (attendu : chemin alphanumérique, « / . _ - »)', $strict);
