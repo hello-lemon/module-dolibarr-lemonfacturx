@@ -74,7 +74,10 @@ class ActionsLemonFacturX
 		}
 
 		// Écrire le XML dans un fichier temporaire pour le subprocess d'injection
-		$xmlTmpFile = tempnam(sys_get_temp_dir(), 'facturx_');
+		//$xmlTmpFile = tempnam(sys_get_temp_dir(), 'facturx_');
+		$xmlTempDir = DOL_DATA_ROOT . '/facturx/temp';
+		dol_mkdir($xmlTempDir);
+		$xmlTmpFile = tempnam($xmlTempDir, 'facturx_');
 		file_put_contents($xmlTmpFile, $xml);
 
 		// Injection via process séparé pour éviter le conflit FPDF/TCPDF
