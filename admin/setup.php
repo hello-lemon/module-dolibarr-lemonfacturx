@@ -35,10 +35,8 @@ $langs->loadLangs(["admin", "lemonfacturx@lemonfacturx"]);
 
 $action = GETPOST('action', 'aZ09');
 
-// Valeurs par défaut des mentions légales BR-FR (synchronisées avec xml_builder.php)
-$defaultPMD = 'En cas de retard de paiement, une pénalité égale à 3 fois le taux d\'intérêt légal sera exigible (article L.441-10 du Code de commerce).';
-$defaultPMT = 'Une indemnité forfaitaire de 40 euros sera exigible pour frais de recouvrement en cas de retard de paiement.';
-$defaultAAB = 'Pas d\'escompte pour paiement anticipé.';
+// Les valeurs par défaut des mentions légales BR-FR sont définies dans la lib
+// (LEMONFACTURX_DEFAULT_NOTE_*) pour rester synchronisées avec le builder XML.
 
 // Sauvegarde des paramètres
 if ($action == 'update' && $_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -121,7 +119,7 @@ print '<select name="LEMONFACTURX_BANK_ACCOUNT" class="flat minwidth300">';
 print '<option value="0">-- '.$langs->trans("Select").' --</option>';
 if ($resql) {
 	while ($obj = $db->fetch_object($resql)) {
-		$infoIban = !empty($obj->iban_prefix) ? ' ('.substr($obj->iban_prefix, 0, 4).'...'.substr($obj->iban_prefix, -4).')' : ' (pas d\'IBAN)';
+		$infoIban = !empty($obj->iban_prefix) ? ' ('.lemonfacturx_iban_short($obj->iban_prefix).')' : ' (pas d\'IBAN)';
 		print '<option value="'.$obj->rowid.'"'.($currentBankAccount == $obj->rowid ? ' selected' : '').'>';
 		print dol_escape_htmltag($obj->label.$infoIban);
 		print '</option>';
@@ -172,9 +170,9 @@ print '</tr>';
 print '<tr class="liste_titre"><td colspan="2">'.$langs->trans("LemonFacturXLegalNotes").'</td></tr>';
 
 foreach ([
-	['LEMONFACTURX_NOTE_PMD', 'LemonFacturXNotePMD', $defaultPMD],
-	['LEMONFACTURX_NOTE_PMT', 'LemonFacturXNotePMT', $defaultPMT],
-	['LEMONFACTURX_NOTE_AAB', 'LemonFacturXNoteAAB', $defaultAAB],
+	['LEMONFACTURX_NOTE_PMD', 'LemonFacturXNotePMD', LEMONFACTURX_DEFAULT_NOTE_PMD],
+	['LEMONFACTURX_NOTE_PMT', 'LemonFacturXNotePMT', LEMONFACTURX_DEFAULT_NOTE_PMT],
+	['LEMONFACTURX_NOTE_AAB', 'LemonFacturXNoteAAB', LEMONFACTURX_DEFAULT_NOTE_AAB],
 ] as $note) {
 	$val = getDolGlobalString($note[0], $note[2]);
 	print '<tr class="oddeven">';
@@ -205,56 +203,46 @@ print load_fiche_titre($langs->trans("LemonFacturXDiagTitle"), '', '');
 $diagErrors = [];
 $diagOk = [];
 
-if (empty($mysoc->name)) {
-	$diagErrors[] = $langs->trans("LemonFacturXDiagSellerName");
-} else {
-	$diagOk[] = $langs->trans("LemonFacturXDiagSellerName").' : '.dol_escape_htmltag($mysoc->name);
-}
+/**
+ * Ajoute une ligne au diag : OK si la valeur est non vide, sinon en erreur.
+ * Le suffixe (références BR-FR-xx) est ajouté au libellé d'erreur uniquement.
+ */
+$diagCheck = function ($transKey, $value, $okFormatted = null, $errorSuffix = '') use ($langs, &$diagOk, &$diagErrors) {
+	$label = $langs->trans($transKey);
+	if (empty($value)) {
+		$diagErrors[] = $label.($errorSuffix !== '' ? ' '.$errorSuffix : '');
+		return;
+	}
+	$diagOk[] = $label.' : '.($okFormatted !== null ? $okFormatted : dol_escape_htmltag($value));
+};
 
-if (empty($mysoc->address) || empty($mysoc->zip) || empty($mysoc->town)) {
-	$diagErrors[] = $langs->trans("LemonFacturXDiagSellerAddress");
-} else {
-	$diagOk[] = $langs->trans("LemonFacturXDiagSellerAddress").' : '.dol_escape_htmltag($mysoc->zip).' '.dol_escape_htmltag($mysoc->town);
-}
+$diagCheck('LemonFacturXDiagSellerName', $mysoc->name);
 
-if (empty($mysoc->tva_intra)) {
-	$diagErrors[] = $langs->trans("LemonFacturXDiagSellerVAT");
-} else {
-	$diagOk[] = $langs->trans("LemonFacturXDiagSellerVAT").' : '.dol_escape_htmltag($mysoc->tva_intra);
-}
+$hasAddr = !empty($mysoc->address) && !empty($mysoc->zip) && !empty($mysoc->town);
+$diagCheck('LemonFacturXDiagSellerAddress', $hasAddr ? '1' : '', dol_escape_htmltag($mysoc->zip).' '.dol_escape_htmltag($mysoc->town));
+
+$diagCheck('LemonFacturXDiagSellerVAT', $mysoc->tva_intra);
 
 if (empty($mysoc->idprof2)) {
 	$diagErrors[] = $langs->trans("LemonFacturXDiagSellerSIRET").' (BR-FR-10)';
 } else {
-	$siren = substr(preg_replace('/[^0-9]/', '', $mysoc->idprof2), 0, 9);
+	$siren = lemonfacturx_extract_siren($mysoc->idprof2);
 	$diagOk[] = $langs->trans("LemonFacturXDiagSellerSIRET").' : SIREN '.dol_escape_htmltag($siren).' (SIRET '.dol_escape_htmltag($mysoc->idprof2).')';
 }
 
-if (empty($mysoc->email)) {
-	$diagErrors[] = $langs->trans("LemonFacturXDiagSellerEmail").' (BR-FR-13 / BT-34)';
-} else {
-	$diagOk[] = $langs->trans("LemonFacturXDiagSellerEmail").' : '.dol_escape_htmltag($mysoc->email);
-}
+$diagCheck('LemonFacturXDiagSellerEmail', $mysoc->email, null, '(BR-FR-13 / BT-34)');
 
 $bankId = getDolGlobalInt('LEMONFACTURX_BANK_ACCOUNT');
-if ($bankId > 0) {
-	$bankCheck = new Account($db);
-	if ($bankCheck->fetch($bankId) > 0) {
-		if (empty($bankCheck->iban)) {
-			$diagErrors[] = $langs->trans("LemonFacturXDiagIBAN");
-		} else {
-			$diagOk[] = $langs->trans("LemonFacturXDiagIBAN").' : '.substr($bankCheck->iban, 0, 4).'...'.substr($bankCheck->iban, -4);
-		}
-		if (empty($bankCheck->bic)) {
-			$diagErrors[] = $langs->trans("LemonFacturXDiagBIC");
-		} else {
-			$diagOk[] = $langs->trans("LemonFacturXDiagBIC").' : '.$bankCheck->bic;
-		}
-	} else {
-		$diagErrors[] = $langs->trans("LemonFacturXDiagBankNotFound");
-	}
-} else {
+if ($bankId <= 0) {
 	$diagErrors[] = $langs->trans("LemonFacturXDiagBankNotSet");
+} else {
+	$bankCheck = new Account($db);
+	if ($bankCheck->fetch($bankId) <= 0) {
+		$diagErrors[] = $langs->trans("LemonFacturXDiagBankNotFound");
+	} else {
+		$diagCheck('LemonFacturXDiagIBAN', $bankCheck->iban, lemonfacturx_iban_short($bankCheck->iban));
+		$diagCheck('LemonFacturXDiagBIC', $bankCheck->bic);
+	}
 }
 
 print '<table class="noborder centpercent">';
@@ -279,11 +267,9 @@ print '<div style="margin:30px 0;padding:20px 25px;border:1px solid #e0e0e0;bord
 print '<h3 style="margin:0 0 10px 0;color:#333;">'.$langs->trans("LemonFacturXAboutTitle").'</h3>';
 print '<p style="margin:0 0 12px 0;color:#555;">'.$langs->trans("LemonFacturXAboutIntro").'</p>';
 print '<ul style="margin:0 0 15px 20px;color:#555;">';
-print '<li><strong>'.$langs->trans("LemonFacturXAboutSvc1Title").'</strong> : '.$langs->trans("LemonFacturXAboutSvc1Desc").'</li>';
-print '<li><strong>'.$langs->trans("LemonFacturXAboutSvc2Title").'</strong> : '.$langs->trans("LemonFacturXAboutSvc2Desc").'</li>';
-print '<li><strong>'.$langs->trans("LemonFacturXAboutSvc3Title").'</strong> : '.$langs->trans("LemonFacturXAboutSvc3Desc").'</li>';
-print '<li><strong>'.$langs->trans("LemonFacturXAboutSvc4Title").'</strong> : '.$langs->trans("LemonFacturXAboutSvc4Desc").'</li>';
-print '<li><strong>'.$langs->trans("LemonFacturXAboutSvc5Title").'</strong> : '.$langs->trans("LemonFacturXAboutSvc5Desc").'</li>';
+for ($i = 1; $i <= 5; $i++) {
+	print '<li><strong>'.$langs->trans("LemonFacturXAboutSvc".$i."Title").'</strong> : '.$langs->trans("LemonFacturXAboutSvc".$i."Desc").'</li>';
+}
 print '</ul>';
 print '<p style="margin:0;">';
 print '<a href="https://hellolemon.fr" target="_blank" rel="noopener" class="butAction" style="text-decoration:none;">'.$langs->trans("LemonFacturXAboutCTA").'</a>';

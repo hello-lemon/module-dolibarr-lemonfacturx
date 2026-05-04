@@ -12,6 +12,26 @@
  */
 
 /**
+ * Liste des codes ISO des pays de l'Union européenne (utilisée pour qualifier
+ * la catégorie de TVA EN16931 sur les opérations B2B intracommunautaires).
+ *
+ * Mentions légales BR-FR par défaut (BG-3 IncludedNote) : surchargeable via
+ * les constantes Dolibarr LEMONFACTURX_NOTE_*.
+ *
+ * define() (au lieu de const) pour rester tolérant si la lib est incluse depuis
+ * deux chemins distincts (custom + dol_buildpath) sur certains setups.
+ */
+if (!defined('LEMONFACTURX_EU_COUNTRIES')) {
+	define('LEMONFACTURX_EU_COUNTRIES', [
+		'AT','BE','BG','CY','CZ','DE','DK','EE','ES','FI','FR','GR','HR','HU',
+		'IE','IT','LT','LU','LV','MT','NL','PL','PT','RO','SE','SI','SK',
+	]);
+	define('LEMONFACTURX_DEFAULT_NOTE_PMD', 'En cas de retard de paiement, une pénalité égale à 3 fois le taux d\'intérêt légal sera exigible (article L.441-10 du Code de commerce).');
+	define('LEMONFACTURX_DEFAULT_NOTE_PMT', 'Une indemnité forfaitaire de 40 euros sera exigible pour frais de recouvrement en cas de retard de paiement.');
+	define('LEMONFACTURX_DEFAULT_NOTE_AAB', 'Pas d\'escompte pour paiement anticipé.');
+}
+
+/**
  * Génère le XML Factur-X EN16931 à partir d'une facture Dolibarr
  *
  * @param Facture $invoice   Objet facture Dolibarr (avec lines chargées)
@@ -27,35 +47,15 @@ function lemonfacturx_build_xml($invoice, $mysoc)
 	$dueDate = !empty($invoice->date_lim_reglement) ? date('Ymd', $invoice->date_lim_reglement) : $issueDate;
 	$currency = !empty($conf->currency) ? $conf->currency : 'EUR';
 
-	// Vendeur
-	$sellerCountry = !empty($mysoc->country_code) ? $mysoc->country_code : 'FR';
-	$sellerVat = $mysoc->tva_intra ?? '';
-	$sellerSiren = lemonfacturx_extract_siren($mysoc->idprof2 ?? '');
-	$sellerEmail = $mysoc->email ?? '';
-
-	// Acheteur
 	$buyer = $invoice->thirdparty;
-	$buyerCountry = !empty($buyer->country_code) ? $buyer->country_code : 'FR';
-	$buyerVat = $buyer->tva_intra ?? '';
-	$buyerSiren = lemonfacturx_extract_siren($buyer->idprof2 ?? '');
-	$buyerEmail = lemonfacturx_get_buyer_email($buyer, $invoice->db);
-
-	// IBAN/BIC depuis le compte bancaire configuré
-	$iban = '';
-	$bic = '';
-	$bankAccountId = getDolGlobalInt('LEMONFACTURX_BANK_ACCOUNT');
-	if ($bankAccountId > 0) {
-		require_once DOL_DOCUMENT_ROOT.'/compta/bank/class/account.class.php';
-		$bankAccount = new Account($invoice->db);
-		if ($bankAccount->fetch($bankAccountId) > 0) {
-			$iban = str_replace(' ', '', $bankAccount->iban);
-			$bic = str_replace(' ', '', $bankAccount->bic);
-		}
-	}
+	$bank = lemonfacturx_get_bank_account($invoice->db);
 	$paymentMeans = getDolGlobalString('LEMONFACTURX_PAYMENT_MEANS', '30');
 
-	// Construction XML
-	$xml = '<?xml version="1.0" encoding="UTF-8"?>'."\n";
+	// Lignes utiles : on filtre une seule fois les lignes sans montant
+	// (descriptions, titres, sous-totaux) pour les réutiliser ci-dessous.
+	$billableLines = lemonfacturx_filter_billable_lines($invoice->lines);
+
+	$xml  = '<?xml version="1.0" encoding="UTF-8"?>'."\n";
 	$xml .= '<rsm:CrossIndustryInvoice xmlns:rsm="urn:un:unece:uncefact:data:standard:CrossIndustryInvoice:100"';
 	$xml .= ' xmlns:ram="urn:un:unece:uncefact:data:standard:ReusableAggregateBusinessInformationEntity:100"';
 	$xml .= ' xmlns:udt="urn:un:unece:uncefact:data:standard:UnqualifiedDataType:100"';
@@ -75,45 +75,21 @@ function lemonfacturx_build_xml($invoice, $mysoc)
 	$xml .= '  <ram:IssueDateTime>'."\n";
 	$xml .= '    <udt:DateTimeString format="102">'.xmlEncode($issueDate).'</udt:DateTimeString>'."\n";
 	$xml .= '  </ram:IssueDateTime>'."\n";
-
-	// BR-FR-05 : Mentions légales obligatoires (BG-3 IncludedNote)
-	$notePMD = getDolGlobalString('LEMONFACTURX_NOTE_PMD', 'En cas de retard de paiement, une pénalité égale à 3 fois le taux d\'intérêt légal sera exigible (article L.441-10 du Code de commerce).');
-	$notePMT = getDolGlobalString('LEMONFACTURX_NOTE_PMT', 'Une indemnité forfaitaire de 40 euros sera exigible pour frais de recouvrement en cas de retard de paiement.');
-	$noteAAB = getDolGlobalString('LEMONFACTURX_NOTE_AAB', 'Pas d\'escompte pour paiement anticipé.');
-
-	$xml .= '  <ram:IncludedNote>'."\n";
-	$xml .= '    <ram:Content>'.xmlEncode($notePMD).'</ram:Content>'."\n";
-	$xml .= '    <ram:SubjectCode>PMD</ram:SubjectCode>'."\n";
-	$xml .= '  </ram:IncludedNote>'."\n";
-	$xml .= '  <ram:IncludedNote>'."\n";
-	$xml .= '    <ram:Content>'.xmlEncode($notePMT).'</ram:Content>'."\n";
-	$xml .= '    <ram:SubjectCode>PMT</ram:SubjectCode>'."\n";
-	$xml .= '  </ram:IncludedNote>'."\n";
-	$xml .= '  <ram:IncludedNote>'."\n";
-	$xml .= '    <ram:Content>'.xmlEncode($noteAAB).'</ram:Content>'."\n";
-	$xml .= '    <ram:SubjectCode>AAB</ram:SubjectCode>'."\n";
-	$xml .= '  </ram:IncludedNote>'."\n";
-
+	$xml .= lemonfacturx_build_legal_notes_xml();
 	$xml .= '</rsm:ExchangedDocument>'."\n";
 
 	// === SupplyChainTradeTransaction ===
 	$xml .= '<rsm:SupplyChainTradeTransaction>'."\n";
 
 	$xmlLineNum = 0;
-	foreach ($invoice->lines as $line) {
-		// Ignorer les lignes sans montant (descriptions, titres, sous-totaux)
-		if ((float) $line->qty == 0 && (float) $line->total_ht == 0) {
-			continue;
-		}
+	foreach ($billableLines as $line) {
 		$xmlLineNum++;
 		$xml .= lemonfacturx_build_line_xml($line, $xmlLineNum, $currency, $invoice, $buyer, $mysoc);
 	}
 
 	$xml .= '  <ram:ApplicableHeaderTradeAgreement>'."\n";
-
-	$xml .= lemonfacturx_build_trade_party_xml('Seller', $mysoc->name, $mysoc->address, $mysoc->zip, $mysoc->town, $sellerCountry, $sellerVat, $sellerSiren, $sellerEmail);
-	$xml .= lemonfacturx_build_trade_party_xml('Buyer', $buyer->name, $buyer->address ?? '', $buyer->zip ?? '', $buyer->town ?? '', $buyerCountry, $buyerVat, $buyerSiren, $buyerEmail);
-
+	$xml .= lemonfacturx_build_trade_party_xml('Seller', $mysoc, $mysoc->email ?? '');
+	$xml .= lemonfacturx_build_trade_party_xml('Buyer', $buyer, lemonfacturx_get_buyer_email($buyer, $invoice->db));
 	$xml .= '  </ram:ApplicableHeaderTradeAgreement>'."\n";
 
 	$xml .= '  <ram:ApplicableHeaderTradeDelivery>'."\n";
@@ -128,20 +104,19 @@ function lemonfacturx_build_xml($invoice, $mysoc)
 
 	$xml .= '    <ram:SpecifiedTradeSettlementPaymentMeans>'."\n";
 	$xml .= '      <ram:TypeCode>'.xmlEncode($paymentMeans).'</ram:TypeCode>'."\n";
-	if (!empty($iban)) {
+	if (!empty($bank['iban'])) {
 		$xml .= '      <ram:PayeePartyCreditorFinancialAccount>'."\n";
-		$xml .= '        <ram:IBANID>'.xmlEncode($iban).'</ram:IBANID>'."\n";
+		$xml .= '        <ram:IBANID>'.xmlEncode($bank['iban']).'</ram:IBANID>'."\n";
 		$xml .= '      </ram:PayeePartyCreditorFinancialAccount>'."\n";
-		if (!empty($bic)) {
+		if (!empty($bank['bic'])) {
 			$xml .= '      <ram:PayeeSpecifiedCreditorFinancialInstitution>'."\n";
-			$xml .= '        <ram:BICID>'.xmlEncode($bic).'</ram:BICID>'."\n";
+			$xml .= '        <ram:BICID>'.xmlEncode($bank['bic']).'</ram:BICID>'."\n";
 			$xml .= '      </ram:PayeeSpecifiedCreditorFinancialInstitution>'."\n";
 		}
 	}
 	$xml .= '    </ram:SpecifiedTradeSettlementPaymentMeans>'."\n";
 
-	$taxBreakdown = lemonfacturx_get_tax_breakdown($invoice, $buyer, $mysoc);
-	foreach ($taxBreakdown as $rate => $amounts) {
+	foreach (lemonfacturx_get_tax_breakdown($billableLines, $invoice, $buyer, $mysoc) as $rate => $amounts) {
 		$xml .= '    <ram:ApplicableTradeTax>'."\n";
 		$xml .= '      <ram:CalculatedAmount>'.formatAmount($amounts['tax']).'</ram:CalculatedAmount>'."\n";
 		$xml .= '      <ram:TypeCode>VAT</ram:TypeCode>'."\n";
@@ -172,6 +147,70 @@ function lemonfacturx_build_xml($invoice, $mysoc)
 }
 
 /**
+ * Renvoie les seules lignes facturables (qty != 0 OU total_ht != 0).
+ * Filtre les descriptions, titres et sous-totaux qui ne portent ni quantité
+ * ni montant et ne doivent pas apparaître dans le XML EN16931.
+ *
+ * @param array $lines Lignes Dolibarr
+ * @return array
+ */
+function lemonfacturx_filter_billable_lines($lines)
+{
+	$out = [];
+	foreach ((array) $lines as $line) {
+		if ((float) $line->qty == 0 && (float) $line->total_ht == 0) {
+			continue;
+		}
+		$out[] = $line;
+	}
+	return $out;
+}
+
+/**
+ * Récupère IBAN/BIC depuis le compte bancaire configuré dans le module.
+ *
+ * @param object $db Handle DB Dolibarr
+ * @return array ['iban' => string, 'bic' => string] (chaînes vides si non configuré)
+ */
+function lemonfacturx_get_bank_account($db)
+{
+	$bankAccountId = getDolGlobalInt('LEMONFACTURX_BANK_ACCOUNT');
+	if ($bankAccountId <= 0) {
+		return ['iban' => '', 'bic' => ''];
+	}
+	require_once DOL_DOCUMENT_ROOT.'/compta/bank/class/account.class.php';
+	$bankAccount = new Account($db);
+	if ($bankAccount->fetch($bankAccountId) <= 0) {
+		return ['iban' => '', 'bic' => ''];
+	}
+	return [
+		'iban' => str_replace(' ', '', $bankAccount->iban),
+		'bic'  => str_replace(' ', '', $bankAccount->bic),
+	];
+}
+
+/**
+ * Génère les 3 IncludedNote BR-FR-05 (PMD, PMT, AAB) avec les valeurs
+ * surchargeables via constantes Dolibarr.
+ */
+function lemonfacturx_build_legal_notes_xml()
+{
+	$notes = [
+		'PMD' => getDolGlobalString('LEMONFACTURX_NOTE_PMD', LEMONFACTURX_DEFAULT_NOTE_PMD),
+		'PMT' => getDolGlobalString('LEMONFACTURX_NOTE_PMT', LEMONFACTURX_DEFAULT_NOTE_PMT),
+		'AAB' => getDolGlobalString('LEMONFACTURX_NOTE_AAB', LEMONFACTURX_DEFAULT_NOTE_AAB),
+	];
+	$xml = '';
+	foreach ($notes as $code => $content) {
+		$xml .= '  <ram:IncludedNote>'."\n";
+		$xml .= '    <ram:Content>'.xmlEncode($content).'</ram:Content>'."\n";
+		$xml .= '    <ram:SubjectCode>'.$code.'</ram:SubjectCode>'."\n";
+		$xml .= '  </ram:IncludedNote>'."\n";
+	}
+	return $xml;
+}
+
+/**
  * Génère le XML d'une ligne de facture
  *
  * @param object $line        Ligne de facture Dolibarr
@@ -184,20 +223,10 @@ function lemonfacturx_build_xml($invoice, $mysoc)
  */
 function lemonfacturx_build_line_xml($line, $lineNum, $currency, $invoice, $thirdparty, $mysoc)
 {
-	$xml = '  <ram:IncludedSupplyChainTradeLineItem>'."\n";
-
-	$xml .= '    <ram:AssociatedDocumentLineDocument>'."\n";
-	$xml .= '      <ram:LineID>'.xmlEncode((string) $lineNum).'</ram:LineID>'."\n";
-	$xml .= '    </ram:AssociatedDocumentLineDocument>'."\n";
-
 	$desc = trim(strip_tags($line->desc ?: ($line->description ?? $line->label ?? '')));
-	if (empty($desc)) {
+	if ($desc === '') {
 		$desc = 'Article';
 	}
-
-	$xml .= '    <ram:SpecifiedTradeProduct>'."\n";
-	$xml .= '      <ram:Name>'.xmlEncode($desc).'</ram:Name>'."\n";
-	$xml .= '    </ram:SpecifiedTradeProduct>'."\n";
 
 	$qty       = (float) $line->qty;
 	$vatRate   = (float) $line->tva_tx;
@@ -207,16 +236,21 @@ function lemonfacturx_build_line_xml($line, $lineNum, $currency, $invoice, $thir
 	// Prix net unitaire : total_ht / qty pour tenir compte des remises
 	$unitPrice = ($qty != 0) ? $lineTotal / $qty : (float) $line->subprice;
 
+	$xml  = '  <ram:IncludedSupplyChainTradeLineItem>'."\n";
+	$xml .= '    <ram:AssociatedDocumentLineDocument>'."\n";
+	$xml .= '      <ram:LineID>'.xmlEncode((string) $lineNum).'</ram:LineID>'."\n";
+	$xml .= '    </ram:AssociatedDocumentLineDocument>'."\n";
+	$xml .= '    <ram:SpecifiedTradeProduct>'."\n";
+	$xml .= '      <ram:Name>'.xmlEncode($desc).'</ram:Name>'."\n";
+	$xml .= '    </ram:SpecifiedTradeProduct>'."\n";
 	$xml .= '    <ram:SpecifiedLineTradeAgreement>'."\n";
 	$xml .= '      <ram:NetPriceProductTradePrice>'."\n";
 	$xml .= '        <ram:ChargeAmount>'.formatAmount($unitPrice).'</ram:ChargeAmount>'."\n";
 	$xml .= '      </ram:NetPriceProductTradePrice>'."\n";
 	$xml .= '    </ram:SpecifiedLineTradeAgreement>'."\n";
-
 	$xml .= '    <ram:SpecifiedLineTradeDelivery>'."\n";
 	$xml .= '      <ram:BilledQuantity unitCode="'.xmlEncode($unitCode).'">'.formatAmount($qty).'</ram:BilledQuantity>'."\n";
 	$xml .= '    </ram:SpecifiedLineTradeDelivery>'."\n";
-
 	$xml .= '    <ram:SpecifiedLineTradeSettlement>'."\n";
 	$xml .= '      <ram:ApplicableTradeTax>'."\n";
 	$xml .= '        <ram:TypeCode>VAT</ram:TypeCode>'."\n";
@@ -227,7 +261,6 @@ function lemonfacturx_build_line_xml($line, $lineNum, $currency, $invoice, $thir
 	$xml .= '        <ram:LineTotalAmount>'.formatAmount($lineTotal).'</ram:LineTotalAmount>'."\n";
 	$xml .= '      </ram:SpecifiedTradeSettlementLineMonetarySummation>'."\n";
 	$xml .= '    </ram:SpecifiedLineTradeSettlement>'."\n";
-
 	$xml .= '  </ram:IncludedSupplyChainTradeLineItem>'."\n";
 
 	return $xml;
@@ -236,19 +269,20 @@ function lemonfacturx_build_line_xml($line, $lineNum, $currency, $invoice, $thir
 /**
  * Calcule la ventilation TVA par taux, avec catégorie EN16931 qualifiée
  * (S / K / G / O / E) et motif d'exonération associé.
+ *
+ * @param array  $billableLines  Lignes filtrées (cf. lemonfacturx_filter_billable_lines)
+ * @param object $invoice        Facture Dolibarr
+ * @param object $thirdparty     Tiers acheteur
+ * @param object $mysoc          Société émettrice
+ * @return array<string,array>   Indexé par taux, avec base/tax/categoryCode/exemption
  */
-function lemonfacturx_get_tax_breakdown($invoice, $thirdparty, $mysoc)
+function lemonfacturx_get_tax_breakdown($billableLines, $invoice, $thirdparty, $mysoc)
 {
 	$breakdown = [];
-
-	foreach ($invoice->lines as $line) {
-		// Ignorer les lignes sans montant (descriptions, titres, sous-totaux)
-		if ((float) $line->qty == 0 && (float) $line->total_ht == 0) {
-			continue;
-		}
+	foreach ($billableLines as $line) {
 		$rate = (string) ((float) $line->tva_tx);
-		$taxCat = lemonfacturx_resolve_tax_category($line, $invoice, $thirdparty, $mysoc);
 		if (!isset($breakdown[$rate])) {
+			$taxCat = lemonfacturx_resolve_tax_category($line, $invoice, $thirdparty, $mysoc);
 			$breakdown[$rate] = [
 				'base'         => 0,
 				'tax'          => 0,
@@ -259,7 +293,6 @@ function lemonfacturx_get_tax_breakdown($invoice, $thirdparty, $mysoc)
 		$breakdown[$rate]['base'] += (float) $line->total_ht;
 		$breakdown[$rate]['tax']  += (float) $line->total_tva;
 	}
-
 	return $breakdown;
 }
 
@@ -274,8 +307,8 @@ function lemonfacturx_get_tax_breakdown($invoice, $thirdparty, $mysoc)
 function lemonfacturx_check_mandatory($invoice, $mysoc)
 {
 	$warnings = [];
+	$prefix   = 'Factur-X : ';
 
-	// Vendeur
 	$sellerChecks = [
 		'name'      => 'nom de la société émettrice manquant',
 		'address'   => 'adresse de la société émettrice manquante',
@@ -287,11 +320,10 @@ function lemonfacturx_check_mandatory($invoice, $mysoc)
 	];
 	foreach ($sellerChecks as $field => $message) {
 		if (empty($mysoc->$field)) {
-			$warnings[] = 'Factur-X : '.$message;
+			$warnings[] = $prefix.$message;
 		}
 	}
 
-	// Acheteur
 	$buyer = $invoice->thirdparty;
 	$buyerChecks = [
 		'name'    => 'nom du tiers acheteur manquant',
@@ -301,40 +333,46 @@ function lemonfacturx_check_mandatory($invoice, $mysoc)
 	];
 	foreach ($buyerChecks as $field => $message) {
 		if (empty($buyer->$field)) {
-			$warnings[] = 'Factur-X : '.$message;
+			$warnings[] = $prefix.$message;
 		}
 	}
 
-	// Email acheteur (fiche tiers + contacts)
-	if (empty(lemonfacturx_get_buyer_email($buyer, $invoice->db))) {
-		$warnings[] = 'Factur-X : email du tiers acheteur manquant (ni sur la fiche tiers, ni sur ses contacts) — obligatoire BR-FR-12 (BT-49)';
+	if (lemonfacturx_get_buyer_email($buyer, $invoice->db) === '') {
+		$warnings[] = $prefix.'email du tiers acheteur manquant (ni sur la fiche tiers, ni sur ses contacts) — obligatoire BR-FR-12 (BT-49)';
 	}
 
 	if (getDolGlobalInt('LEMONFACTURX_BANK_ACCOUNT') <= 0) {
-		$warnings[] = 'Factur-X : aucun compte bancaire configuré dans le module';
+		$warnings[] = $prefix.'aucun compte bancaire configuré dans le module';
 	}
 
 	return $warnings;
 }
 
 /**
- * Génère le bloc XML d'un TradeParty (vendeur ou acheteur)
+ * Génère le bloc XML d'un TradeParty (vendeur ou acheteur).
+ *
+ * @param string $role   'Seller' ou 'Buyer'
+ * @param object $party  Société émettrice (mysoc) ou Societe acheteur
+ * @param string $email  Email à publier dans le bloc URI (BT-49 / BT-34)
  */
-function lemonfacturx_build_trade_party_xml($role, $name, $address, $zip, $city, $country, $vat, $siren, $email)
+function lemonfacturx_build_trade_party_xml($role, $party, $email)
 {
 	$tag = ($role === 'Seller') ? 'SellerTradeParty' : 'BuyerTradeParty';
+	$country = !empty($party->country_code) ? $party->country_code : 'FR';
+	$vat     = $party->tva_intra ?? '';
+	$siren   = lemonfacturx_extract_siren($party->idprof2 ?? '');
 
-	$xml = '    <ram:'.$tag.'>'."\n";
-	$xml .= '      <ram:Name>'.xmlEncode($name).'</ram:Name>'."\n";
+	$xml  = '    <ram:'.$tag.'>'."\n";
+	$xml .= '      <ram:Name>'.xmlEncode($party->name).'</ram:Name>'."\n";
 	if (!empty($siren)) {
 		$xml .= '      <ram:SpecifiedLegalOrganization>'."\n";
 		$xml .= '        <ram:ID schemeID="0002">'.xmlEncode($siren).'</ram:ID>'."\n";
 		$xml .= '      </ram:SpecifiedLegalOrganization>'."\n";
 	}
 	$xml .= '      <ram:PostalTradeAddress>'."\n";
-	$xml .= '        <ram:PostcodeCode>'.xmlEncode($zip).'</ram:PostcodeCode>'."\n";
-	$xml .= '        <ram:LineOne>'.xmlEncode($address).'</ram:LineOne>'."\n";
-	$xml .= '        <ram:CityName>'.xmlEncode($city).'</ram:CityName>'."\n";
+	$xml .= '        <ram:PostcodeCode>'.xmlEncode($party->zip ?? '').'</ram:PostcodeCode>'."\n";
+	$xml .= '        <ram:LineOne>'.xmlEncode($party->address ?? '').'</ram:LineOne>'."\n";
+	$xml .= '        <ram:CityName>'.xmlEncode($party->town ?? '').'</ram:CityName>'."\n";
 	$xml .= '        <ram:CountryID>'.xmlEncode($country).'</ram:CountryID>'."\n";
 	$xml .= '      </ram:PostalTradeAddress>'."\n";
 	// BR-FR-13 / BT-49 : n'émettre le bloc URI que si l'email est réellement renseigné.
@@ -363,7 +401,8 @@ function lemonfacturx_build_trade_party_xml($role, $name, $address, $zip, $city,
  */
 function lemonfacturx_map_unit_code($line)
 {
-	static $map = [
+	static $unitCache = [];
+	static $shortLabelMap = [
 		'h'      => 'HUR', // heure
 		'min'    => 'MIN', // minute
 		'd'      => 'DAY', // jour
@@ -393,24 +432,27 @@ function lemonfacturx_map_unit_code($line)
 	if ($fkUnit <= 0) {
 		return 'C62';
 	}
+	if (isset($unitCache[$fkUnit])) {
+		return $unitCache[$fkUnit];
+	}
 
 	global $db;
-	$sql = "SELECT short_label, unit_type FROM ".MAIN_DB_PREFIX."c_units WHERE rowid=".((int) $fkUnit);
+	$sql = "SELECT short_label, unit_type FROM ".MAIN_DB_PREFIX."c_units WHERE rowid = ".$fkUnit;
 	$res = $db->query($sql);
 	if (!$res) {
-		return 'C62';
+		return $unitCache[$fkUnit] = 'C62';
 	}
 	$obj = $db->fetch_object($res);
 	if (!$obj || empty($obj->short_label)) {
-		return 'C62';
+		return $unitCache[$fkUnit] = 'C62';
 	}
 
 	$code = strtolower(trim($obj->short_label));
 	// Désambiguïser 'm' : time=minute (MIN), size=mètre (MTR)
 	if ($code === 'm') {
-		return ($obj->unit_type === 'time') ? 'MIN' : 'MTR';
+		return $unitCache[$fkUnit] = ($obj->unit_type === 'time') ? 'MIN' : 'MTR';
 	}
-	return $map[$code] ?? 'C62';
+	return $unitCache[$fkUnit] = ($shortLabelMap[$code] ?? 'C62');
 }
 
 /**
@@ -424,15 +466,13 @@ function lemonfacturx_map_unit_code($line)
  */
 function lemonfacturx_resolve_tax_category($line, $invoice, $thirdparty, $mysoc)
 {
-	$tvaTx = (float) $line->tva_tx;
-
 	// Société émettrice non assujettie (franchise en base, micro-entreprise) : O = hors champ
 	if (isset($mysoc->tva_assuj) && (int) $mysoc->tva_assuj === 0) {
 		return ['code' => 'O', 'exemption' => 'TVA non applicable, art. 293 B du CGI'];
 	}
 
 	// TVA > 0 : standard
-	if ($tvaTx > 0) {
+	if ((float) $line->tva_tx > 0) {
 		return ['code' => 'S', 'exemption' => null];
 	}
 
@@ -440,13 +480,8 @@ function lemonfacturx_resolve_tax_category($line, $invoice, $thirdparty, $mysoc)
 	$buyerCountry = strtoupper(!empty($thirdparty->country_code) ? $thirdparty->country_code : 'FR');
 	$buyerVat     = !empty($thirdparty->tva_intra) ? $thirdparty->tva_intra : '';
 
-	static $euCountries = [
-		'AT','BE','BG','CY','CZ','DE','DK','EE','ES','FI','FR','GR','HR','HU',
-		'IE','IT','LT','LU','LV','MT','NL','PL','PT','RO','SE','SI','SK',
-	];
-
 	// Export hors UE : G
-	if (!in_array($buyerCountry, $euCountries, true)) {
+	if (!in_array($buyerCountry, LEMONFACTURX_EU_COUNTRIES, true)) {
 		return ['code' => 'G', 'exemption' => 'Export hors Union européenne'];
 	}
 
@@ -467,13 +502,14 @@ function lemonfacturx_resolve_tax_category($line, $invoice, $thirdparty, $mysoc)
  */
 function lemonfacturx_resolve_document_type($invoice)
 {
-	if ((int) $invoice->type === (int) Facture::TYPE_CREDIT_NOTE) {
-		return '381';
+	switch ((int) $invoice->type) {
+		case (int) Facture::TYPE_CREDIT_NOTE:
+			return '381';
+		case (int) Facture::TYPE_DEPOSIT:
+			return '386'; // EN16931 : prepayment / advance invoice
+		default:
+			return '380';
 	}
-	if ((int) $invoice->type === (int) Facture::TYPE_DEPOSIT) {
-		return '386'; // EN16931 : prepayment / advance invoice
-	}
-	return '380';
 }
 
 /**
@@ -497,7 +533,7 @@ function lemonfacturx_get_prepaid_amount($invoice)
 function lemonfacturx_build_monetary_summation_xml($invoice, $currency)
 {
 	$lineTotal     = (float) $invoice->total_ht;
-	$taxBasisTotal = (float) $invoice->total_ht;
+	$taxBasisTotal = $lineTotal;
 	$taxTotal      = (float) $invoice->total_tva;
 	$grandTotal    = (float) $invoice->total_ttc;
 	$totalPrepaid  = lemonfacturx_get_prepaid_amount($invoice);
@@ -545,13 +581,22 @@ function lemonfacturx_get_buyer_email($buyer, $db)
 		." AND email IS NOT NULL AND email != ''"
 		." ORDER BY rowid ASC LIMIT 1";
 	$res = $db->query($sql);
-	if ($res) {
-		$obj = $db->fetch_object($res);
-		if ($obj && !empty($obj->email)) {
-			return $obj->email;
-		}
+	if (!$res) {
+		return '';
 	}
-	return '';
+	$obj = $db->fetch_object($res);
+	return ($obj && !empty($obj->email)) ? $obj->email : '';
+}
+
+/**
+ * Tronque un IBAN pour affichage : "FR76...0185". Vide si IBAN absent.
+ */
+function lemonfacturx_iban_short($iban)
+{
+	if (empty($iban)) {
+		return '';
+	}
+	return substr($iban, 0, 4).'...'.substr($iban, -4);
 }
 
 function xmlEncode($str)

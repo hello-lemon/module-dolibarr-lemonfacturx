@@ -18,6 +18,9 @@ class ActionsLemonFacturX
 	public $resPrint = '';
 	public $results = [];
 
+	/** @var string|null Fichier XML temporaire à nettoyer en sortie de hook */
+	private $xmlTmpFile = null;
+
 	public function __construct($db)
 	{
 		$this->db = $db;
@@ -28,7 +31,7 @@ class ActionsLemonFacturX
 	 */
 	public function afterPDFCreation($parameters, &$object, &$action, $hookmanager)
 	{
-		global $conf, $mysoc;
+		global $mysoc;
 
 		if (!getDolGlobalInt('LEMONFACTURX_ENABLED')) {
 			return 0;
@@ -54,7 +57,7 @@ class ActionsLemonFacturX
 		$modulePath = dirname(__DIR__);
 		require_once $modulePath.'/core/lib/lemonfacturx.lib.php';
 
-		$strict = getDolGlobalInt('LEMONFACTURX_STRICT_MODE', 0);
+		$strict = (int) getDolGlobalInt('LEMONFACTURX_STRICT_MODE', 0);
 
 		// Vérifier les infos obligatoires (on continue même si incomplet en best-effort).
 		// Les warnings ne sont PAS affichés individuellement : ils sont consolidés
@@ -64,7 +67,6 @@ class ActionsLemonFacturX
 			dol_syslog('LemonFacturX WARNING: '.$w, LOG_WARNING);
 		}
 
-		// Générer le XML
 		$xml = lemonfacturx_build_xml($invoice, $mysoc);
 
 		// Validation interne avant injection : well-formed + XSD EN16931
@@ -74,15 +76,54 @@ class ActionsLemonFacturX
 		}
 
 		// Écrire le XML dans un fichier temporaire pour le subprocess d'injection
-		$xmlTmpFile = tempnam(sys_get_temp_dir(), 'facturx_');
-		file_put_contents($xmlTmpFile, $xml);
+		$this->xmlTmpFile = tempnam(sys_get_temp_dir(), 'facturx_');
+		file_put_contents($this->xmlTmpFile, $xml);
 
-		// Injection via process séparé pour éviter le conflit FPDF/TCPDF
-		if (!function_exists('exec')) {
-			@unlink($xmlTmpFile);
-			return $this->handleNonFatal('LemonFacturX: la fonction exec() est désactivée sur ce serveur', $strict);
+		try {
+			if (!function_exists('exec')) {
+				return $this->handleNonFatal('LemonFacturX: la fonction exec() est désactivée sur ce serveur', $strict);
+			}
+
+			$phpBin = $this->resolvePhpBinary($strict);
+			if ($phpBin === null) {
+				// Le message a déjà été remonté par resolvePhpBinary()
+				return $strict ? -1 : 0;
+			}
+
+			$cmd  = escapeshellarg($phpBin);
+			$cmd .= ' '.escapeshellarg($modulePath.'/scripts/inject_facturx.php');
+			$cmd .= ' '.escapeshellarg($file);
+			$cmd .= ' '.escapeshellarg($this->xmlTmpFile);
+			$cmd .= ' 2>&1';
+
+			$output = [];
+			$returnCode = 0;
+			exec($cmd, $output, $returnCode);
+
+			if ($returnCode !== 0) {
+				return $this->handleNonFatal('LemonFacturX: injection PDF échouée : '.implode(' ', $output), $strict);
+			}
+
+			dol_syslog('LemonFacturX: PDF Factur-X généré pour '.$invoice->ref, LOG_INFO);
+			$this->reportSuccess($invoice->ref, $warnings);
+			return 0;
+		} finally {
+			if ($this->xmlTmpFile !== null) {
+				@unlink($this->xmlTmpFile);
+				$this->xmlTmpFile = null;
+			}
 		}
+	}
 
+	/**
+	 * Résout et valide le binaire PHP CLI configuré (LEMONFACTURX_PHP_CLI_PATH).
+	 * Retourne null en cas d'échec après avoir remonté le message via handleNonFatal().
+	 *
+	 * @param int $strict
+	 * @return string|null
+	 */
+	protected function resolvePhpBinary($strict)
+	{
 		$phpBin = getDolGlobalString('LEMONFACTURX_PHP_CLI_PATH', 'php');
 
 		// Hardening : la constante est modifiable par un admin via /admin/const.php.
@@ -91,49 +132,46 @@ class ActionsLemonFacturX
 		// les valeurs avec caractères exotiques pour éviter les fautes de frappe
 		// qui partiraient en boucle d'erreur et pour afficher un message clair.
 		if (!preg_match('#^[A-Za-z0-9/._-]+$#', $phpBin)) {
-			@unlink($xmlTmpFile);
 			dol_syslog('LemonFacturX: LEMONFACTURX_PHP_CLI_PATH valeur reçue : '.$phpBin, LOG_ERR);
-			return $this->handleNonFatal('LemonFacturX: LEMONFACTURX_PHP_CLI_PATH contient des caractères interdits (attendu : chemin alphanumérique, « / . _ - »)', $strict);
+			$this->handleNonFatal('LemonFacturX: LEMONFACTURX_PHP_CLI_PATH contient des caractères interdits (attendu : chemin alphanumérique, « / . _ - »)', $strict);
+			return null;
 		}
+
 		// Si l'admin a fourni un chemin absolu, on vérifie qu'il pointe vraiment
 		// vers un exécutable. Cas relatif ("php", "php8.2") : on laisse passer
 		// au shell qui résoudra via PATH.
 		if (strpos($phpBin, '/') !== false && !is_executable($phpBin)) {
-			@unlink($xmlTmpFile);
-			return $this->handleNonFatal('LemonFacturX: le binaire PHP configuré est introuvable ou non exécutable : '.$phpBin, $strict);
+			$this->handleNonFatal('LemonFacturX: le binaire PHP configuré est introuvable ou non exécutable : '.$phpBin, $strict);
+			return null;
 		}
 
-		$scriptPath = escapeshellarg($modulePath.'/scripts/inject_facturx.php');
-		$pdfArg = escapeshellarg($file);
-		$xmlArg = escapeshellarg($xmlTmpFile);
+		return $phpBin;
+	}
 
-		$output = [];
-		$returnCode = 0;
-		exec(escapeshellarg($phpBin)." $scriptPath $pdfArg $xmlArg 2>&1", $output, $returnCode);
-
-		@unlink($xmlTmpFile);
-
-		if ($returnCode !== 0) {
-			return $this->handleNonFatal('LemonFacturX: injection PDF échouée : '.implode(' ', $output), $strict);
-		}
-
-		dol_syslog('LemonFacturX: PDF Factur-X généré pour '.$invoice->ref, LOG_INFO);
-
-		// Message unique consolidé : vert si aucun warning, orange sinon avec la liste.
+	/**
+	 * Affiche le message final consolidé (vert si aucun warning, orange avec la liste sinon).
+	 *
+	 * @param string $invoiceRef
+	 * @param array  $warnings
+	 */
+	protected function reportSuccess($invoiceRef, array $warnings)
+	{
 		if (empty($warnings)) {
-			setEventMessages('Facture électronique Factur-X EN16931 embarquée dans le PDF '.$invoice->ref.'.', null, 'mesgs');
-		} else {
-			$msg = 'Facture électronique Factur-X EN16931 embarquée dans le PDF '.$invoice->ref.'. ';
-			$msg .= count($warnings).' avertissement'.(count($warnings) > 1 ? 's' : '').' non bloquant'.(count($warnings) > 1 ? 's' : '').' à corriger pour une conformité totale BR-FR :<br>';
-			$msg .= '<ul style="margin:4px 0 0 0;padding-left:20px;">';
-			foreach ($warnings as $w) {
-				$msg .= '<li>'.dol_escape_htmltag($w).'</li>';
-			}
-			$msg .= '</ul>';
-			setEventMessages($msg, null, 'warnings');
+			setEventMessages('Facture électronique Factur-X EN16931 embarquée dans le PDF '.$invoiceRef.'.', null, 'mesgs');
+			return;
 		}
 
-		return 0;
+		$count  = count($warnings);
+		$plural = ($count > 1) ? 's' : '';
+
+		$msg  = 'Facture électronique Factur-X EN16931 embarquée dans le PDF '.$invoiceRef.'. ';
+		$msg .= $count.' avertissement'.$plural.' non bloquant'.$plural.' à corriger pour une conformité totale BR-FR :<br>';
+		$msg .= '<ul style="margin:4px 0 0 0;padding-left:20px;">';
+		foreach ($warnings as $w) {
+			$msg .= '<li>'.dol_escape_htmltag($w).'</li>';
+		}
+		$msg .= '</ul>';
+		setEventMessages($msg, null, 'warnings');
 	}
 
 	/**
@@ -180,10 +218,7 @@ class ActionsLemonFacturX
 
 		$dom = new DOMDocument();
 		if (!$dom->loadXML($xml)) {
-			$errs = libxml_get_errors();
-			libxml_clear_errors();
-			$msg = !empty($errs) ? trim($errs[0]->message) : 'XML mal formé';
-			return 'XML mal formé : '.$msg;
+			return 'XML mal formé : '.$this->consumeFirstLibxmlError('XML mal formé');
 		}
 
 		$xsdPath = $modulePath.'/vendor/atgp/factur-x/xsd/factur-x/en16931/Factur-X_1.08_EN16931.xsd';
@@ -195,13 +230,20 @@ class ActionsLemonFacturX
 		}
 
 		if (!$dom->schemaValidate($xsdPath)) {
-			$errs = libxml_get_errors();
-			libxml_clear_errors();
-			$firstErr = !empty($errs) ? trim($errs[0]->message) : 'violation de contrainte inconnue';
-			return 'non conforme XSD EN16931 : '.$firstErr;
+			return 'non conforme XSD EN16931 : '.$this->consumeFirstLibxmlError('violation de contrainte inconnue');
 		}
 
 		libxml_clear_errors();
 		return null;
+	}
+
+	/**
+	 * Récupère le premier message d'erreur libxml et vide le buffer.
+	 */
+	protected function consumeFirstLibxmlError($fallback)
+	{
+		$errs = libxml_get_errors();
+		libxml_clear_errors();
+		return !empty($errs) ? trim($errs[0]->message) : $fallback;
 	}
 }
