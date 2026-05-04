@@ -19,7 +19,7 @@ class modLemonFacturX extends DolibarrModules
 		global $conf;
 
 		$this->db = $db;
-		$this->numero = 500200;
+		$this->numero = 210000;
 		$this->rights_class = 'lemonfacturx';
 		$this->family = "financial";
 		$this->module_position = '90';

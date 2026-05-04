@@ -66,7 +66,7 @@ Consulter la section **Changelog** en bas de ce README pour connaître les chang
 
 ```
 lemonfacturx/
-├── core/modules/modLemonFacturX.class.php   # Descripteur module (n° 500200)
+├── core/modules/modLemonFacturX.class.php   # Descripteur module (n° 210000)
 ├── class/actions_lemonfacturx.class.php     # Hook afterPDFCreation
 ├── lib/
 │   ├── xml_builder.php                      # Générateur XML EN16931

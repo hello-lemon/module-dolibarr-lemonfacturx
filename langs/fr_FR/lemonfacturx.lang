@@ -1,5 +1,5 @@
-Module500200Name = LemonFacturX
-Module500200Desc = Génération automatique de factures Factur-X EN16931
+Module210000Name = LemonFacturX
+Module210000Desc = Génération automatique de factures Factur-X EN16931
 
 LemonFacturXSetup = Configuration LemonFacturX
 LemonFacturXEnabled = Activer la conversion Factur-X
