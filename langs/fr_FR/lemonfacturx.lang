@@ -20,6 +20,10 @@ LemonFacturXDiagIBAN = IBAN du compte bancaire
 LemonFacturXDiagBIC = BIC du compte bancaire
 LemonFacturXDiagBankNotFound = Compte bancaire introuvable
 LemonFacturXDiagBankNotSet = Aucun compte bancaire sélectionné
+LemonFacturXDiagModuleBankEnabled = Module Banque/Caisse activé
+LemonFacturXDiagModuleBankDisabled = Module Banque/Caisse désactivé (requis pour gérer le compte bancaire)
+LemonFacturXDiagModuleInvoiceEnabled = Module Factures activé
+LemonFacturXDiagModuleInvoiceDisabled = Module Factures désactivé (requis pour générer des factures)
 LemonFacturXDiagFixLink = Corriger
 LemonFacturXDiagAllOk = Toutes les informations obligatoires sont renseignées !
 

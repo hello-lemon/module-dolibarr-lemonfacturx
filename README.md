@@ -253,6 +253,18 @@ php tests/run-tests.php
 
 ## Changelog
 
+### 2.0.1 (mai 2026)
+
+Correctifs UX du diagnostic de configuration :
+
+- Le bouton **Corriger** du diagnostic est désormais ciblé selon le type d'erreur :
+  - Compte bancaire / IBAN / BIC → page **Banques/Caisses**
+  - Raison sociale, adresse, TVA, SIRET, email → page **Société/Organisation**
+  - Module désactivé → page **Modules**
+- Ajout d'un check des modules Dolibarr requis (**Banque/Caisse** et **Factures**) en tête du diagnostic, pour orienter clairement les nouveaux installateurs sur les prérequis.
+
+Aucune migration nécessaire.
+
 ### 1.1.1 (avril 2026)
 
 Maintenance des dépendances vendored, suite aux [PRs `.gitattributes`](https://github.com/hello-lemon/module-dolibarr-lemonfacturx/issues/3) fusionnées upstream par William Desportes :

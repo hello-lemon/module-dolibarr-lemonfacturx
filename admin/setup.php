@@ -206,15 +206,28 @@ $diagOk = [];
 /**
  * Ajoute une ligne au diag : OK si la valeur est non vide, sinon en erreur.
  * Le suffixe (références BR-FR-xx) est ajouté au libellé d'erreur uniquement.
+ * $fixUrl pointe vers la page Dolibarr permettant de corriger ce point précis.
  */
-$diagCheck = function ($transKey, $value, $okFormatted = null, $errorSuffix = '') use ($langs, &$diagOk, &$diagErrors) {
+$diagCheck = function ($transKey, $value, $okFormatted = null, $errorSuffix = '', $fixUrl = '/admin/company.php') use ($langs, &$diagOk, &$diagErrors) {
 	$label = $langs->trans($transKey);
 	if (empty($value)) {
-		$diagErrors[] = $label.($errorSuffix !== '' ? ' '.$errorSuffix : '');
+		$diagErrors[] = ['msg' => $label.($errorSuffix !== '' ? ' '.$errorSuffix : ''), 'fix' => $fixUrl];
 		return;
 	}
 	$diagOk[] = $label.' : '.($okFormatted !== null ? $okFormatted : dol_escape_htmltag($value));
 };
+
+// Modules Dolibarr requis
+if (!isModEnabled('banque')) {
+	$diagErrors[] = ['msg' => $langs->trans("LemonFacturXDiagModuleBankDisabled"), 'fix' => '/admin/modules.php'];
+} else {
+	$diagOk[] = $langs->trans("LemonFacturXDiagModuleBankEnabled");
+}
+if (!isModEnabled('facture')) {
+	$diagErrors[] = ['msg' => $langs->trans("LemonFacturXDiagModuleInvoiceDisabled"), 'fix' => '/admin/modules.php'];
+} else {
+	$diagOk[] = $langs->trans("LemonFacturXDiagModuleInvoiceEnabled");
+}
 
 $diagCheck('LemonFacturXDiagSellerName', $mysoc->name);
 
@@ -224,7 +237,7 @@ $diagCheck('LemonFacturXDiagSellerAddress', $hasAddr ? '1' : '', dol_escape_html
 $diagCheck('LemonFacturXDiagSellerVAT', $mysoc->tva_intra);
 
 if (empty($mysoc->idprof2)) {
-	$diagErrors[] = $langs->trans("LemonFacturXDiagSellerSIRET").' (BR-FR-10)';
+	$diagErrors[] = ['msg' => $langs->trans("LemonFacturXDiagSellerSIRET").' (BR-FR-10)', 'fix' => '/admin/company.php'];
 } else {
 	$siren = lemonfacturx_extract_siren($mysoc->idprof2);
 	$diagOk[] = $langs->trans("LemonFacturXDiagSellerSIRET").' : SIREN '.dol_escape_htmltag($siren).' (SIRET '.dol_escape_htmltag($mysoc->idprof2).')';
@@ -232,16 +245,18 @@ if (empty($mysoc->idprof2)) {
 
 $diagCheck('LemonFacturXDiagSellerEmail', $mysoc->email, null, '(BR-FR-13 / BT-34)');
 
+// Banque : lien "Corriger" vers la liste des comptes (compta/bank/list.php), pas la fiche société.
+$bankFixUrl = '/compta/bank/list.php?mainmenu=bank';
 $bankId = getDolGlobalInt('LEMONFACTURX_BANK_ACCOUNT');
 if ($bankId <= 0) {
-	$diagErrors[] = $langs->trans("LemonFacturXDiagBankNotSet");
+	$diagErrors[] = ['msg' => $langs->trans("LemonFacturXDiagBankNotSet"), 'fix' => $bankFixUrl];
 } else {
 	$bankCheck = new Account($db);
 	if ($bankCheck->fetch($bankId) <= 0) {
-		$diagErrors[] = $langs->trans("LemonFacturXDiagBankNotFound");
+		$diagErrors[] = ['msg' => $langs->trans("LemonFacturXDiagBankNotFound"), 'fix' => $bankFixUrl];
 	} else {
-		$diagCheck('LemonFacturXDiagIBAN', $bankCheck->iban, lemonfacturx_iban_short($bankCheck->iban));
-		$diagCheck('LemonFacturXDiagBIC', $bankCheck->bic);
+		$diagCheck('LemonFacturXDiagIBAN', $bankCheck->iban, lemonfacturx_iban_short($bankCheck->iban), '', $bankFixUrl);
+		$diagCheck('LemonFacturXDiagBIC', $bankCheck->bic, null, '', $bankFixUrl);
 	}
 }
 
@@ -252,8 +267,8 @@ foreach ($diagOk as $ok) {
 	print '<tr class="oddeven"><td><span style="color: green;">&#10004;</span> '.$ok.'</td><td></td></tr>';
 }
 foreach ($diagErrors as $err) {
-	print '<tr class="oddeven"><td><span style="color: red;">&#10008;</span> <strong>'.$err.'</strong></td>';
-	print '<td><a href="'.DOL_URL_ROOT.'/admin/company.php">'.$langs->trans("LemonFacturXDiagFixLink").'</a></td></tr>';
+	print '<tr class="oddeven"><td><span style="color: red;">&#10008;</span> <strong>'.$err['msg'].'</strong></td>';
+	print '<td><a href="'.DOL_URL_ROOT.$err['fix'].'">'.$langs->trans("LemonFacturXDiagFixLink").'</a></td></tr>';
 }
 
 if (empty($diagErrors)) {
